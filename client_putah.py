@@ -7,26 +7,29 @@ import threading
 log = []
 class TCP_header():
 
-    def __init__(self):
+    def __init__(self, seq_num, ack_num, syn, ack):
         self.source_prt = 0 # 16 bits
         self.destination_prt = 0 # 16 bits
-        self.sequence_num = 0 # 32 bits
-        self.ACK_num = 0 # 32 bits
-        self.header_length = 0 # 4 bits
-        self.unused = 0 # 4 bits
-        self.CWR = 0 # 1 bit
-        self.ECE = 0 # 1 bit
-        self.URG = 0 # 1 bit
-        self.ACK = 0 # ack flag 0 if not ack, 1 if syn-ack or ack
-        self.PSH = 0 # 1 bit
-        self.RST = 0 # 1 bit
-        self.SYN = 0 # syn flag 0 if not syn, 1 if syn-ack or syn
-        self.FIN = 0 # 1 bit
-        self.receive_window = 0 # 16 bits
-        self.internet_checksum = 0 # 16 bits
-        self.urgent_data_ptr = 0 # 16 bits
-        self.options = 0
+        self.sequence_num = seq_num # 32 bits
+        self.ACK_num = ack_num # 32 bits
+        # self.header_length = 0 # 4 bits
+        # self.unused = 0 # 4 bits
+        # self.CWR = 0 # 1 bit
+        # self.ECE = 0 # 1 bit
+        # self.URG = 0 # 1 bit
+        self.ACK = syn # ack flag 0 if not ack, 1 if syn-ack or ack
+        # self.PSH = 0 # 1 bit
+        # self.RST = 0 # 1 bit
+        self.SYN = ack # syn flag 0 if not syn, 1 if syn-ack or syn
+        # self.FIN = fin # 1 bit
+        # self.receive_window = 0 # 16 bits
+        # self.internet_checksum = 0 # 16 bits
+        # self.urgent_data_ptr = 0 # 16 bits
+        # self.options = 0
         self.data = ""
+    
+    def header_only(self):
+        pass
 
     
     def custom_message(self, ack, syn, fin):
@@ -48,9 +51,16 @@ class TCP_header():
         elif self.data == "":
             return "DATA"
     
+    # change this
     def get_bits(self):
-        packet = "0"
-        return packet
+        bits = '{0:016b}'.format(self.source_prt)
+        bits += '{0:016b}'.format(self.destination_prt)
+        bits = '{0:032b}'.format(self.seq_num)
+        bits += '{0:032b}'.format(self.ack_num)
+        bits += '{0:01b}'.format(self.syn)
+        bits += '{0:01b}'.format(self.ack)
+        bits += '{0:030b}'.format(0)
+        return bits.encode()
 
 
 # def send_synack(message, DNS_IP, DNS_PORT, type, length, client_socket):
@@ -67,26 +77,52 @@ class TCP_header():
 
 #     client.close()
 
-# class handshake():
-#     def __init__(self):
-#         self.state = None
-#         self.connection = False
+
+class Client():
+    def __init__(self):
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.state = None
+        self.connection = False
     
-#     def change_state():
+    def handshake(self, address, port):
+    
+        # first handshake
+        message = TCP_header()
+        message.SYN = 1
+
+        self.socket.sendto(message, (address, port))
+
+        # receive second handshake
+        data, addr = self.socket.recvfrom(1024)
+
+        message = bits_to_header(data)
+
+
         
+        if(message.SYN == 1 and message.ACK == 1):
+            # send third handshake
+            message.SYN = 0
+            self.socket.sendto(message, (address, port))
+        
+        self.udpconnect()
+            
+    def udpconnect(socket, address, port):
+        pass
 
-# class TCPsend():
-#     pass
 
-def handshake():
-    client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+
+
+
+
+
+
+
+
+
     
-    # first handshake
-    message = TCP_header()
-    message.SYN = 1
 
-    bit_message = message.get_bits()
-    client.sendto(bit_message)
+
 
 
 # def send_data_port(message, DNS_IP, DNS_PORT, type, length, client_socket): #message can be SYN, SYNACK, ACK, or FIN
@@ -132,4 +168,10 @@ def handshake():
 #             break
 #     print_log()
 
-
+def bits_to_header(bits):
+	bits = bits.decode()
+	seq_num = int(bits[:32], 2)
+	ack_num = int(bits[32:64], 2)
+	syn = int(bits[64], 2)
+	ack = int(bits[65], 2)
+	return TCP_header(seq_num, ack_num, syn, ack)

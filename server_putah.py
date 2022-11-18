@@ -12,10 +12,12 @@ class TCP_over_UDP(server_ip):
         self.data_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.data_socket.bind(("127.0.01", 1985))
         #self.lock = threading.Lock()
+
     def thread_handshake(self):
         t = threading.Thread(target=self.handshake())
         t.daemon = True
         t.start()
+        
     def handshake(self):
         start = 0
         packet, address = self.welcome_socket.recvfrom(32) #check this size
