@@ -47,6 +47,11 @@ class TCP_header():
             return "FIN"
         elif self.data == "":
             return "DATA"
+    
+    def get_bits(self):
+        packet = "0"
+        return packet
+
 
 # def send_synack(message, DNS_IP, DNS_PORT, type, length, client_socket):
 #     READ_BUFFER = 1024  # size of the buffer to read in the received UDP packet.
@@ -62,8 +67,26 @@ class TCP_header():
 
 #     client.close()
 
-class TCPsend():
-    pass
+# class handshake():
+#     def __init__(self):
+#         self.state = None
+#         self.connection = False
+    
+#     def change_state():
+        
+
+# class TCPsend():
+#     pass
+
+def handshake():
+    client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    
+    # first handshake
+    message = TCP_header()
+    message.SYN = 1
+
+    bit_message = message.get_bits()
+    client.sendto(bit_message)
 
 
 # def send_data_port(message, DNS_IP, DNS_PORT, type, length, client_socket): #message can be SYN, SYNACK, ACK, or FIN
