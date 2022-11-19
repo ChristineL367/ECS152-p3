@@ -152,7 +152,7 @@ class Server():
                     
 
         except KeyboardInterrupt:
-            print("Keyboard Interruption")
+            print("Server Keyboard Interruption")
             self.closeconnection(1, address[0], address[1], self.curconnection.data_port.getsockname()[1])
 
 
@@ -194,7 +194,7 @@ class Server():
                 message.FIN = 1
                 self.curconnection.data_port.sendto(message.get_bits(), (address, dst_port))
 
-                data, addr = self.socket.recvfrom(1024)
+                data, addr = self.curconnection.data_port.recvfrom(1024)
                 message = self.bits_to_header(data)
 
                 if message.ACK == 1:

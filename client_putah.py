@@ -129,6 +129,7 @@ class Client():
                 
                 if message.FIN == 1:
                     self.closeconnection(1, address, port)
+                    break
                 
                 if message.data == "Pong":
                     time.sleep(2)
