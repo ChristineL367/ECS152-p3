@@ -152,7 +152,8 @@ class Client():
 
         if putah == 0:
             ack = False
-            while ack != True:
+            count = 0
+            while ack != True or count != 3:
                 # dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53):
                 message = TCP_header(port,0,0,0,0,1,"")
 

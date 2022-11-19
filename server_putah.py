@@ -4,6 +4,7 @@ import threading
 import socket
 import binascii
 import time
+
 log = []
 class connection():
     def __init__(self):
@@ -113,6 +114,7 @@ class Server():
                 synack.custom_message(1,1,0)
 
                 connection.got_syn = 1
+                log.append([address[0], address[1], "SYNACK", len(synack.get_bits())])
                 self.send_packet(synack.get_bits(), address[0], address[1], self.welcome_socket)
             
             packet2, address2 = self.welcome_socket.recvfrom(1024)
@@ -161,6 +163,8 @@ class Server():
                 
                 response = TCP_header(address[1], 0, 0, 0, 0, 0, "Pong", self.curconnection.data_port.getsockname()[1])
                 packet = response.get_bits()
+
+                log.append([address[0], address[1], "DATA", len(packet)])
                 self.send_packet(packet, address[0], address[1], self.curconnection.data_port)
                     
 
@@ -174,8 +178,9 @@ class Server():
         t = threading.Thread(target=self.handshake(connection)) #create new thread for a new client connection
         t.daemon = True
         t.start()
-    def logger(source, dest, type, length):
-        log.append([source, dest, type, length])
+    
+    # def logger(source, dest, type, length):
+    #     log.append([source, dest, type, length])
 
 
     def bits_to_header(self, bits):
@@ -202,6 +207,8 @@ class Server():
             while ack != True:
                 message = TCP_header(dst_port,0,0,0,0,0, "", src_port)
                 message.FIN = 1
+
+                log.append([address, dst_port, "FIN", len(message.get_bits())])
                 self.welcome_socket.sendto(message.get_bits(), (address, dst_port))
 
                 data, addr = self.welcome_socket.recvfrom(1024)
@@ -212,6 +219,8 @@ class Server():
         elif putah == 0:
             message = TCP_header(dst_port,0,0,0,0,0, "", src_port)  
             message.ACK = 1
+
+            log.append([address, dst_port, "ACK", len(message.get_bits())])
             self.welcome_socket.sendto(message.get_bits(), (address, dst_port))
 
         print("closing connection for port ")
@@ -224,19 +233,27 @@ class Server():
         # putah = 2 -> wrong data
         if putah == 1:
             ack = False
-            while ack != True:
+            count = 0
+            while ack != True or count != 3:
                 message = TCP_header(dst_port,0,0,0,0,0, "", src_port)
                 message.FIN = 1
+
+                print("in data fin")
+                log.append([address, dst_port, "FIN", len(message.get_bits())])
                 self.curconnection.data_port.sendto(message.get_bits(), (address, dst_port))
 
                 data, addr = self.curconnection.data_port.recvfrom(1024)
                 message = self.bits_to_header(data)
+                print("ack in fin", message.ACK)
 
                 if message.ACK == 1:
                     break
+                count += 1
         elif putah == 0:
             message = TCP_header(dst_port,0,0,0,0,0, "", src_port)  
             message.ACK = 1
+
+            log.append([address, dst_port, "ACK", len(message.get_bits())])
             self.curconnection.data_port.sendto(message.get_bits(), (address, dst_port))
 
         print("closing connection for port ")
@@ -253,6 +270,9 @@ if __name__ == '__main__':
     if new_connection.connected == 1:
         print("connected to new client")
         server_init.data()
+
+    for i in range(0,len(log)):
+       print(log[i][0] , " | " , log[i][1] , " | " , log[i][2] , " | " , log[i][3])
 
 #python3 client_putah.py --server_ip 127.0.0.1 --server_port 32007
 #python3 server_putah.py --ip 127.0.0.1 --port 32007
