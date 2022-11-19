@@ -37,11 +37,13 @@ class TCP_header():
     def get_bits(self):
         bits = '{0:016b}'.format(self.source_prt)
         bits += '{0:016b}'.format(self.destination_prt)
-        bits = '{0:032b}'.format(self.seq_num)
-        bits += '{0:032b}'.format(self.ack_num)
-        bits += '{0:01b}'.format(self.syn)
-        bits += '{0:01b}'.format(self.ack)
-        bits += bin(int(binascii.hexlify('data'), 16))
+        bits += '{0:032b}'.format(self.sequence_num)
+        bits += '{0:032b}'.format(self.ACK_num)
+        bits += '{0:01b}'.format(self.SYN)
+        bits += '{0:01b}'.format(self.ACK)
+        bits += '{0:01b}'.format(self.FIN)
+        if self.data != "":
+            bits += str(bytes(self.data, 'UTF-8'))
         return bits.encode()
     def custom_message(self, ack, syn, fin):
 
@@ -62,10 +64,10 @@ class TCP_header():
             return "DATA"
 class Server():
     def __init__(self, server_port):
-        self.server_port = server_port
+        self.server_port = int(server_port)
         self.connections = [] #queue
         self.welcome_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.welcome_socket.bind(("127.0.01", server_port))
+        self.welcome_socket.bind(('127.0.0.1', self.server_port))
         self.curconnection = None
 
         #self.lock = threading.Lock()
@@ -84,15 +86,16 @@ class Server():
 
         #our_socket.close()
     def handshake(self, connection): #basically accept
-        self.welcome_socket.listen() #put this in main
+        #self.welcome_socket.listen() #put this in main
 
         packet, address = self.welcome_socket.recvfrom(1024) #check this size
+        print(packet)
         message = self.bits_to_header(packet)
         if message.get_type() == "FIN":
             self.closeconnection(0, address, 53)
         if message.get_type() == "SYN":
             connection.data_port = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            connection.data_port.bind("127.0.01", 0)
+            connection.data_port.bind(("127.0.0.1", 0))
             synack = TCP_header(connection.data_port, 0,0,0,0,0,0, "", self.server_port)
             synack.custom_message(1,1,0)
 
@@ -121,13 +124,13 @@ class Server():
                 if packet.get_type() == "FIN":
                     break
                 else:
-                    self.data_socket.listen()
-                    packet, address = self.welcome_socket.recvfrom(1024)  # check this size
+                    #self.data_socket.listen()
+                    packet, address = self.welcome_socket.recvfrom(1024)# check this size
                     message = self.bits_to_header(packet)
                     if message.get_type() == "FIN":
                         self.closeconnection(0, address, 53)  # figure out how to end the connection here
                     else:
-                        response = TCP_header(53, 0, 0, 0, 0, 0, 0, "pong", self.curconnection.dataport)
+                        response = TCP_header(53, 0, 0, 0, 0, 0, 0, "Pong", self.curconnection.dataport)
                         packet = response.get_bits()
                         self.send_packet(packet, address, 53, self.curconnection.dataport)
 
@@ -145,18 +148,20 @@ class Server():
         log.append([source, dest, type, length])
 
 
-    def bits_to_header(bits):
+    def bits_to_header(self, bits):
         bits = bits.decode()
         src_port = int(bits[:16], 2)
         dst_port = int(bits[16:32], 2)
         seq_num = int(bits[32:64], 2)
         ack_num = int(bits[64:96], 2)
-        syn = int(bits[97], 2)
-        ack = int(bits[98], 2)
-        fin = int(bits[99], 2)
-        data = bits[99:]
-        data_string = binascii.unhexlify('%x' % data)
-
+        syn = int(bits[96], 2)
+        ack = int(bits[97], 2)
+        fin = int(bits[98], 2)
+        try:
+            data = bits[99:]
+            data_string = data.encode('ascii')
+        except:
+            data_string = ""
         return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data_string, src_port)
     def closeconnection(self, putah, address, port):
 
@@ -188,3 +193,6 @@ if __name__ == '__main__':
     server_init.handshake(connection)
     if new_connection.connected == 1:
         server_init.data()
+
+#python3 client_putah.py --server_ip 127.0.0.1 --server_port 32007
+#python3 server_putah.py --ip 127.0.0.1 --port 32007

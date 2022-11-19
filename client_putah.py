@@ -5,7 +5,7 @@ import binascii
 import threading
 import time
 
-log = {}
+#log = {}
 class TCP_header():
 
     def __init__(self, dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53):
@@ -53,11 +53,15 @@ class TCP_header():
     def get_bits(self):
         bits = '{0:016b}'.format(self.source_prt)
         bits += '{0:016b}'.format(self.destination_prt)
-        bits = '{0:032b}'.format(self.seq_num)
-        bits += '{0:032b}'.format(self.ack_num)
-        bits += '{0:01b}'.format(self.syn)
-        bits += '{0:01b}'.format(self.ack)
-        bits += bin(int(binascii.hexlify('data'), 16))
+        bits += '{0:032b}'.format(self.sequence_num)
+        bits += '{0:032b}'.format(self.ACK_num)
+        bits += '{0:01b}'.format(self.SYN)
+        bits += '{0:01b}'.format(self.ACK)
+        bits += '{0:01b}'.format(self.FIN)
+        if self.data != "":
+
+            bits += str(bytes(self.data, 'UTF-8'))
+
         return bits.encode()
 
 
@@ -69,13 +73,13 @@ class Client():
     
     def handshake(self, address, port):
         
-        global log
+        #global log
         try:
         # first handshake (self, dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53
             message = TCP_header(port,0,0,0,0,0, "")
             message.SYN = 1
 
-            log[address].append([port, "SYN", len(message.get_bits())])
+            #log[address].append([port, "SYN", len(message.get_bits())])
             self.socket.sendto(message.get_bits(), (address, port))
 
             # receive second handshake
@@ -96,7 +100,7 @@ class Client():
                 self.connection = True
                 message.SYN = 0
 
-                log[address].append([port, "ACK", len(message.get_bits())])
+                #log[address].append([port, "ACK", len(message.get_bits())])
                 self.socket.sendto(message.get_bits(), (address, port))
 
         except KeyboardInterrupt:
@@ -105,14 +109,14 @@ class Client():
             
     def udpconnect(self, address, port):
 
-        global log
+        #global log
 
         try:
             while self.connection:
                 
                 message = TCP_header(port,0,0,0,0,0, "Ping")
 
-                log[address].append([port, "DATA", len(message.get_bits())])
+                #log[address].append([port, "DATA", len(message.get_bits())])
                 self.socket.sendto(message.get_bits, (address,port)) 
                 data, addr = self.socket.recvfrom(1024)
 
@@ -137,14 +141,14 @@ class Client():
         # putah = 0 -> client initiated close
         # putah = 1 -> server initiated close
         # putah = 2 -> wrong data
-        global log
+        #global log
 
         if putah == 0:
             ack = False
             while ack != True:
                 message = TCP_header(0,0,0,0,1)
 
-                log[address].append([port, "FIN", len(message.get_bits())])
+                #log[address].append([port, "FIN", len(message.get_bits())])
                 self.socket.sendto(message.get_bits(), (address,port)) 
 
                 data, addr = self.socket.recvfrom(1024)
@@ -167,26 +171,29 @@ def bits_to_header(bits):
     dst_port = int(bits[16:32], 2)
     seq_num = int(bits[32:64], 2)
     ack_num = int(bits[64:96], 2)
-    syn = int(bits[97], 2)
-    ack = int(bits[98], 2)
-    fin = int(bits[99], 2)
-    data = bits[99:]
-    data_string = binascii.unhexlify('%x' % data)
+    syn = int(bits[96], 2)
+    ack = int(bits[97], 2)
+    fin = int(bits[98], 2)
+    try:
+        data = bits[99:]
+        data_string = data.encode('ascii')
+    except:
+        data_string = ""
 
     return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data_string, src_port)
 
 
 if __name__ == '__main__':
-    server_ip = sys.argv[3]
-    port = int(sys.argv[5])
+    server_ip = sys.argv[2]
+    port = int(sys.argv[4])
     client = Client()
 
     client.handshake(server_ip, port)
     if client.connection == True:
             client.udpconnect(server_ip, client.data_port)
 
-    for key in log:
-        print(key + " | " + log[key][0] + " | " + log[key][1] + " | " + log[key][2])
+    #for key in log:
+    #    print(key + " | " + log[key][0] + " | " + log[key][1] + " | " + log[key][2])
             
 
 
