@@ -178,7 +178,7 @@ def bits_to_header(bits):
 
 if __name__ == '__main__':
     server_ip = sys.argv[3]
-    port = sys.argv[5]
+    port = int(sys.argv[5])
     client = Client()
 
     client.handshake(server_ip, port)
