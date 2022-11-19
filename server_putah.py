@@ -91,42 +91,55 @@ class Server():
     def handshake(self, connection): #basically accept
         #self.welcome_socket.listen() #put this in main
 
-        packet, address = self.welcome_socket.recvfrom(1024) #check this size
-        print("handshake get SYN: ", packet)
-        message = self.bits_to_header(packet)
+        try:
+            packet, address = self.welcome_socket.recvfrom(1024) #check this size
+            print("handshake get SYN: ", packet)
+            message = self.bits_to_header(packet)
 
-        print(message.SYN)
+            print(message.SYN)
 
-        if message.get_type() == "FIN":
-            self.closeconnection(0, address, 53)
+            if message.get_type() == "FIN":
+                self.welcoming_closeconnection(0, address[0], address[1], self.welcome_socket.getsockname()[1])
+                return 0
+            
+            if message.get_type() == "SYN":
+                print("got syn")
+                print(address)
+                connection.data_port = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                connection.data_port.bind(("127.0.0.1", 0))
 
-        
-        if message.get_type() == "SYN":
-            print("got syn")
-            print(address)
-            connection.data_port = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            connection.data_port.bind(("127.0.0.1", 0))
+                print(connection.data_port.getsockname()[1])
+                synack = TCP_header(connection.data_port.getsockname()[1], 0,0,0,0,0,"", self.server_port)
+                synack.custom_message(1,1,0)
 
-            print(connection.data_port.getsockname()[1])
-            synack = TCP_header(connection.data_port.getsockname()[1], 0,0,0,0,0,"", self.server_port)
-            synack.custom_message(1,1,0)
+                connection.got_syn = 1
+                self.send_packet(synack.get_bits(), address[0], address[1], self.welcome_socket)
+            
+            packet2, address2 = self.welcome_socket.recvfrom(1024)
+            message2 = self.bits_to_header(packet2)
 
-            connection.got_syn = 1
-            self.send_packet(synack.get_bits(), address[0], address[1], self.welcome_socket)
-        
-        packet2, address2 = self.welcome_socket.recvfrom(1024)
-        message2 = self.bits_to_header(packet2)
-        if message2.get_type() == "ACK" and connection.got_syn == 1:
-            print("check ack")
-            connection.got_ack = 1
-            connection.connected = 1
+            if message2.get_type() == "FIN":
+                print("interruption")
+                self.welcoming_closeconnection(0, address[0], address[1], self.welcome_socket.getsockname()[1])
+                return 0
 
-            self.connections.append(connection)
-            self.curconnection = connection
-            return 1
-        else:
-            print("Couldn't establish handshake...")
+            if message2.get_type() == "ACK" and connection.got_syn == 1:
+                print("check ack")
+                connection.got_ack = 1
+                connection.connected = 1
+
+                self.connections.append(connection)
+                self.curconnection = connection
+                return 1
+            else:
+                print("Couldn't establish handshake...")
+                return 0
+
+        except KeyboardInterrupt:
+            print("Keyboard Interruption")
+            self.welcoming_closeconnection(1, address[0], address[1], self.welcome_socket.getsockname()[1])
             return 0
+
     def data(self):
 
             #separate from welcome thread
@@ -137,7 +150,7 @@ class Server():
                 packet, address = self.curconnection.data_port.recvfrom(1024)# check this size
                 message = self.bits_to_header(packet)
                 if message.get_type() == "FIN":
-                    self.closeconnection(0, address[0], address[1], self.curconnection.data_port.getsockname()[1])  # figure out how to end the connection here
+                    self.data_closeconnection(0, address[0], address[1], self.curconnection.data_port.getsockname()[1])  # figure out how to end the connection here
                     break
                 print(packet)
                 if message.data == "Ping":
@@ -153,7 +166,7 @@ class Server():
 
         except KeyboardInterrupt:
             print("Server Keyboard Interruption")
-            self.closeconnection(1, address[0], address[1], self.curconnection.data_port.getsockname()[1])
+            self.data_closeconnection(1, address[0], address[1], self.curconnection.data_port.getsockname()[1])
 
 
 
@@ -182,7 +195,29 @@ class Server():
         except:
             data_string = ""
         return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data_string, src_port)
-    def closeconnection(self, putah, address, dst_port, src_port):
+    
+    def welcoming_closeconnection(self, putah, address, dst_port, src_port):
+        if putah == 1:
+            ack = False
+            while ack != True:
+                message = TCP_header(dst_port,0,0,0,0,0, "", src_port)
+                message.FIN = 1
+                self.welcome_socket.sendto(message.get_bits(), (address, dst_port))
+
+                data, addr = self.welcome_socket.recvfrom(1024)
+                message = self.bits_to_header(data)
+
+                if message.ACK == 1:
+                    break
+        elif putah == 0:
+            message = TCP_header(dst_port,0,0,0,0,0, "", src_port)  
+            message.ACK = 1
+            self.welcome_socket.sendto(message.get_bits(), (address, dst_port))
+
+        print("closing connection for port ")
+        self.welcome_socket.close()
+
+    def data_closeconnection(self, putah, address, dst_port, src_port):
 
         # putah = 0 -> client initiated close
         # putah = 1 -> server initiated close
@@ -211,10 +246,10 @@ if __name__ == '__main__':
     client_ip = sys.argv[2]
     port = sys.argv[4]
     server_init = Server(sys.argv[4])
-    new_connection = connection() #will enventually be multithreaded
+    new_connection = connection()#will enventually be multithreaded
     handshaken = server_init.handshake(new_connection)
     if handshaken == 1:
-        print("connection established")
+        print("connection established") 
     if new_connection.connected == 1:
         print("connected to new client")
         server_init.data()

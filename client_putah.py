@@ -5,7 +5,7 @@ import binascii
 import threading
 import time
 
-#log = {}
+log = []
 class TCP_header():
 
     def __init__(self, dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53):
@@ -73,19 +73,20 @@ class Client():
     
     def handshake(self, address, port):
         
-        #global log
+        global log
+
         try:
         # first handshake (self, dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53
             message = TCP_header(port,0,0,0,0,0, "")
             message.custom_message(0,1,0)
 
             print("start handshake")
-            #log[address].append([port, "SYN", len(message.get_bits())])
+            log.append([address, port, "SYN", len(message.get_bits())])
             self.client_sock.sendto(message.get_bits(), (address, port))
 
             # receive second handshake
             data, addr = self.client_sock.recvfrom(1024)
-
+            time.sleep(3)
             print("get synack")
             message = bits_to_header(data)
 
@@ -103,23 +104,23 @@ class Client():
                 message = TCP_header(port,0,0,0,0,0, "")
                 message.custom_message(1,0,0)
 
-                #log[address].append([port, "ACK", len(message.get_bits())])
+                log.append([address, port, "ACK", len(message.get_bits())])
                 self.client_sock.sendto(message.get_bits(), (address, port))
 
         except KeyboardInterrupt:
             print("Keyboard Interruption")
-            self.closeconnection(0, address,port)
+            self.closeconnection(0, address, port)
             
     def udpconnect(self, address, port):
 
-        #global log
+        global log
 
         try:
             while self.connection:
                 print("in udp connect")
                 message = TCP_header(port,0,0,0,0,0, "Ping")
 
-                #log[address].append([port, "DATA", len(message.get_bits())])
+                log.append([address, port, "DATA", len(message.get_bits())])
                 self.client_sock.sendto(message.get_bits(), (address,port)) 
                 data, addr = self.client_sock.recvfrom(1024)
 
@@ -155,7 +156,7 @@ class Client():
                 # dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53):
                 message = TCP_header(port,0,0,0,0,1,"")
 
-                #log[address].append([port, "FIN", len(message.get_bits())])
+                log.append([address, port, "FIN", len(message.get_bits())])
                 self.client_sock.sendto(message.get_bits(), (address,port)) 
 
                 data, addr = self.client_sock.recvfrom(1024)
@@ -166,6 +167,8 @@ class Client():
         
         elif putah == 1:
             message = TCP_header(port,0,0,0,1,0,"")
+
+            log.append([address, port, "ACK", len(message.get_bits())])
             self.client_sock.sendto(message.get_bits(), (address,port))      
             
         
@@ -202,8 +205,8 @@ if __name__ == '__main__':
             time.sleep(4)
             client.udpconnect(server_ip, client.data_port)
 
-    #for key in log:
-    #    print(key + " | " + log[key][0] + " | " + log[key][1] + " | " + log[key][2])
+    for i in range(0,len(log)):
+       print(log[i][0] , " | " , log[i][1] , " | " , log[i][2] , " | " , log[i][3])
             
 
 
