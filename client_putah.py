@@ -60,14 +60,14 @@ class TCP_header():
         bits += '{0:01b}'.format(self.FIN)
         if self.data != "":
 
-            bits += str(bytes(self.data, 'UTF-8'))
-
+            bits += self.data
         return bits.encode()
 
 
 class Client():
     def __init__(self):
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.client_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.client_sock.bind(("127.0.0.1", 2000))
         self.connection = False
         self.data_port = 53
     
@@ -77,14 +77,16 @@ class Client():
         try:
         # first handshake (self, dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53
             message = TCP_header(port,0,0,0,0,0, "")
-            message.SYN = 1
+            message.custom_message(0,1,0)
 
+            print("start handshake")
             #log[address].append([port, "SYN", len(message.get_bits())])
-            self.socket.sendto(message.get_bits(), (address, port))
+            self.client_sock.sendto(message.get_bits(), (address, port))
 
             # receive second handshake
-            data, addr = self.socket.recvfrom(1024)
+            data, addr = self.client_sock.recvfrom(1024)
 
+            print("get synack")
             message = bits_to_header(data)
 
             data_port = message.destination_prt
@@ -96,16 +98,17 @@ class Client():
             
             if(message.SYN == 1 and message.ACK == 1):
                 # send third handshake
-
+                print("check synack")
                 self.connection = True
-                message.SYN = 0
+                message = TCP_header(port,0,0,0,0,0, "")
+                message.custom_message(1,0,0)
 
                 #log[address].append([port, "ACK", len(message.get_bits())])
-                self.socket.sendto(message.get_bits(), (address, port))
+                self.client_sock.sendto(message.get_bits(), (address, port))
 
         except KeyboardInterrupt:
             print("Keyboard Interruption")
-            self.closeconnection(address,port)
+            self.closeconnection(0, address,port)
             
     def udpconnect(self, address, port):
 
@@ -113,28 +116,30 @@ class Client():
 
         try:
             while self.connection:
-                
+                print("in udp connect")
                 message = TCP_header(port,0,0,0,0,0, "Ping")
 
                 #log[address].append([port, "DATA", len(message.get_bits())])
-                self.socket.sendto(message.get_bits, (address,port)) 
-                data, addr = self.socket.recvfrom(1024)
+                self.client_sock.sendto(message.get_bits(), (address,port)) 
+                data, addr = self.client_sock.recvfrom(1024)
 
                 message = bits_to_header(data)
+
+                print("client: ", message.data)
                 
                 if message.FIN == 1:
                     self.closeconnection(1, address, port)
                 
                 if message.data == "Pong":
+                    time.sleep(2)
                     continue
                 else:
                     print("wrong data from server")
                     self.closeconnection(2, address, port)
                 
-                time.sleep(4)
         except KeyboardInterrupt:
             print("Keyboard Interruption")
-            self.closeconnection(address,port)
+            self.closeconnection(0, address,port)
     
     def closeconnection(self, putah, address, port):
 
@@ -146,24 +151,25 @@ class Client():
         if putah == 0:
             ack = False
             while ack != True:
-                message = TCP_header(0,0,0,0,1)
+                # dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53):
+                message = TCP_header(port,0,0,0,0,1,"")
 
                 #log[address].append([port, "FIN", len(message.get_bits())])
-                self.socket.sendto(message.get_bits(), (address,port)) 
+                self.client_sock.sendto(message.get_bits(), (address,port)) 
 
-                data, addr = self.socket.recvfrom(1024)
+                data, addr = self.client_sock.recvfrom(1024)
                 message = bits_to_header(data)
 
                 if message.ACK == 1:
                     break
         
         elif putah == 1:
-            message = TCP_header(0,0,0,1,0)
-            self.socket.sendto(message.get_bits(), (address,port))      
+            message = TCP_header(port,0,0,0,1,0,"")
+            self.client_sock.sendto(message.get_bits(), (address,port))      
             
         
         self.connection == 0
-        self.socket.close()
+        self.client_sock.close()
 
 def bits_to_header(bits):
     bits = bits.decode()
@@ -175,8 +181,7 @@ def bits_to_header(bits):
     ack = int(bits[97], 2)
     fin = int(bits[98], 2)
     try:
-        data = bits[99:]
-        data_string = data.encode('ascii')
+        data_string = bits[99:]
     except:
         data_string = ""
 
@@ -189,7 +194,10 @@ if __name__ == '__main__':
     client = Client()
 
     client.handshake(server_ip, port)
+    print("client connectione established")
+    print(client.data_port)
     if client.connection == True:
+            time.sleep(4)
             client.udpconnect(server_ip, client.data_port)
 
     #for key in log:
