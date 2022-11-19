@@ -8,9 +8,9 @@ import time
 log = {}
 class TCP_header():
 
-    def __init__(self, seq_num, ack_num, syn, ack, fin):
-        self.source_prt = 0 # 16 bits
-        self.destination_prt = 0 # 16 bits
+    def __init__(self, dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53):
+        self.source_prt = src_port # 16 bits
+        self.destination_prt = dst_port # 16 bits
         self.sequence_num = seq_num # 32 bits
         self.ACK_num = ack_num # 32 bits
         # self.header_length = 0 # 4 bits
@@ -27,10 +27,7 @@ class TCP_header():
         # self.internet_checksum = 0 # 16 bits
         # self.urgent_data_ptr = 0 # 16 bits
         # self.options = 0
-        self.data = ""
-    
-    def header_only(self):
-        pass
+        self.data = data
 
     
     def custom_message(self, ack, syn, fin):
@@ -60,7 +57,7 @@ class TCP_header():
         bits += '{0:032b}'.format(self.ack_num)
         bits += '{0:01b}'.format(self.syn)
         bits += '{0:01b}'.format(self.ack)
-        bits += '{0:030b}'.format(0)
+        bits += bin(int(binascii.hexlify('data'), 16))
         return bits.encode()
 
 
@@ -72,61 +69,110 @@ class Client():
     def handshake(self, address, port):
         
         global log
-        # first handshake
-        message = TCP_header(0,0,0,0,0)
-        message.SYN = 1
-
-        self.socket.sendto(message.get_bits(), (address, port))
-
-        # receive second handshake
-        data, addr = self.socket.recvfrom(1024)
-
-        message = bits_to_header(data)
-        
-        if(message.SYN == 1 and message.ACK == 1):
-            # send third handshake
-
-            self.connection = True
-            
-            log[address].append(port) # get correct port for connecting socket
-            print("Client Connection Established - IP: " + str(address) + " Port: " + str(port))
-            message.SYN = 0
+        try:
+        # first handshake (self, dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53
+            message = TCP_header(port,0,0,0,0,0, "")
+            message.SYN = 1
 
             self.socket.sendto(message.get_bits(), (address, port))
-        
-        if self.connection == True:
-            self.udpconnect(address, port)
+
+            # receive second handshake
+            data, addr = self.socket.recvfrom(1024)
+
+            message = bits_to_header(data)
+
+            data_port = message.destination_prt
+
+            if message.FIN == 1:
+                self.closeconnection(1, address, port)
+                
+            
+            if(message.SYN == 1 and message.ACK == 1):
+                # send third handshake
+
+                self.connection = True
+                
+                log[address].append(port) # get correct port for connecting socket
+                print("Client Connection Established - IP: " + str(address) + " Port: " + str(port))
+                message.SYN = 0
+
+                self.socket.sendto(message.get_bits(), (address, port))
+            
+            if self.connection == True:
+                self.udpconnect(address, data_port)
+
+        except KeyboardInterrupt:
+            print("Keyboard Interruption")
+            self.closeconnection(address,port)
             
     def udpconnect(self, address, port):
 
         try:
             while self.connection:
-                self.socket.sendto(b"Ping", (address,port)) 
+                
+                message = TCP_header(port,0,0,0,0,0, "Ping")
+
+                self.socket.sendto(message.get_bits, (address,port)) 
                 data, addr = self.socket.recvfrom(1024)
 
+                message = bits_to_header(data)
+                
+                if message.FIN == 1:
+                    self.closeconnection(1, address, port)
+                
+                if message.data == "Pong":
+                    continue
+                else:
+                    print("wrong data from server")
+                    self.closeconnection(2, address, port)
+                
                 time.sleep(4)
         except KeyboardInterrupt:
             print("Keyboard Interruption")
             self.closeconnection(address,port)
     
-    def closeconnection(self, address, port):
-        ack = False
+    def closeconnection(self, putah, address, port):
 
-        while ack != True:
-            message = TCP_header(0,0,0,0,1)
-            self.socket.sendto(message.get_bits(), (address,port)) 
+        # putah = 0 -> client initiated close
+        # putah = 1 -> server initiated close
+        # putah = 2 -> wrong data
+        if putah == 0:
+            ack = False
+            while ack != True:
+                message = TCP_header(0,0,0,0,1)
+                self.socket.sendto(message.get_bits(), (address,port)) 
 
-            data, addr = self.socket.recvfrom(1024)
-            message = bits_to_header(data)
+                data, addr = self.socket.recvfrom(1024)
+                message = bits_to_header(data)
 
-            if message.FIN == 1:
-                break
+                if message.ACK == 1:
+                    break
+        
+        elif putah == 1:
+            message = TCP_header(0,0,0,1,0)
+            self.socket.sendto(message.get_bits(), (address,port))      
+            
         
         self.socket.close()
 
+def bits_to_header(bits):
+    bits = bits.decode()
+    src_port = int(bits[:16], 2)
+    dst_port = int(bits[16:32], 2)
+    seq_num = int(bits[32:64], 2)
+    ack_num = int(bits[64:96], 2)
+    syn = int(bits[97], 2)
+    ack = int(bits[98], 2)
+    fin = int(bits[99], 2)
+    data = bits[99:]
+    data_string = binascii.unhexlify('%x' % data)
+
+    return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data_string, src_port)
+
 
 if __name__ == '__main__':
-    pass
+    server_ip = sys.argv[2]
+    port = sys.argv[4]
 
         
 
@@ -192,10 +238,3 @@ if __name__ == '__main__':
 #             break
 #     print_log()
 
-def bits_to_header(bits):
-	bits = bits.decode()
-	seq_num = int(bits[:32], 2)
-	ack_num = int(bits[32:64], 2)
-	syn = int(bits[64], 2)
-	ack = int(bits[65], 2)
-	return TCP_header(seq_num, ack_num, syn, ack)
