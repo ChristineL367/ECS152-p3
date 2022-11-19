@@ -130,29 +130,30 @@ class Server():
     def data(self):
 
             #separate from welcome thread
-
-        while (1):
-            # try:
-                    #self.data_socket.listen()
-            packet, address = self.curconnection.data_port.recvfrom(1024)# check this size
-            message = self.bits_to_header(packet)
-            print(packet)
-            if message.data == "Ping":
-                print("correct ping")
-            else:
-                print("wrong data")
-                print(message.data)
-            if message.get_type() == "FIN":
-                self.closeconnection(0, address[0], address[1])  # figure out how to end the connection here
-            else:
+        try:
+            while (1):
+                # try:
+                        #self.data_socket.listen()
+                packet, address = self.curconnection.data_port.recvfrom(1024)# check this size
+                message = self.bits_to_header(packet)
+                if message.get_type() == "FIN":
+                    self.closeconnection(0, address[0], address[1], self.curconnection.data_port.getsockname()[1])  # figure out how to end the connection here
+                    break
+                print(packet)
+                if message.data == "Ping":
+                    print("correct ping")
+                else:
+                    print("wrong data")
+                    print(message.data)
+                
                 response = TCP_header(address[1], 0, 0, 0, 0, 0, "Pong", self.curconnection.data_port.getsockname()[1])
                 packet = response.get_bits()
                 self.send_packet(packet, address[0], address[1], self.curconnection.data_port)
-                
+                    
 
-            # except KeyboardInterrupt:
-            #     print("Keyboard Interruption")
-            #     self.closeconnection(1, "127.0.0.1",self.curconnection.data_port)
+        except KeyboardInterrupt:
+            print("Keyboard Interruption")
+            self.closeconnection(1, address[0], address[1], self.curconnection.data_port.getsockname()[1])
 
 
 
@@ -181,7 +182,7 @@ class Server():
         except:
             data_string = ""
         return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data_string, src_port)
-    def closeconnection(self, putah, address, port):
+    def closeconnection(self, putah, address, dst_port, src_port):
 
         # putah = 0 -> client initiated close
         # putah = 1 -> server initiated close
@@ -189,9 +190,9 @@ class Server():
         if putah == 1:
             ack = False
             while ack != True:
-                message = TCP_header(port,0,0,0,0,0, "")
+                message = TCP_header(dst_port,0,0,0,0,0, "", src_port)
                 message.FIN = 1
-                self.curconnection.data_port.sendto(message.get_bits(), (address, port))
+                self.curconnection.data_port.sendto(message.get_bits(), (address, dst_port))
 
                 data, addr = self.socket.recvfrom(1024)
                 message = self.bits_to_header(data)
@@ -199,10 +200,13 @@ class Server():
                 if message.ACK == 1:
                     break
         elif putah == 0:
-            message = TCP_header(port,0,0,0,0,0, "")
+            message = TCP_header(dst_port,0,0,0,0,0, "", src_port)  
             message.ACK = 1
-            self.socket.sendto(message.get_bits(), (address, port))
-        self.socket.close()
+            self.curconnection.data_port.sendto(message.get_bits(), (address, dst_port))
+
+        print("closing connection for port ")
+        self.curconnection.data_port.close()
+
 if __name__ == '__main__':
     client_ip = sys.argv[2]
     port = sys.argv[4]

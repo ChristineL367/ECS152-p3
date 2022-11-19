@@ -168,6 +168,7 @@ class Client():
             self.client_sock.sendto(message.get_bits(), (address,port))      
             
         
+        print("connection closed")
         self.connection == 0
         self.client_sock.close()
 
