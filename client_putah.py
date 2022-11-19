@@ -3,11 +3,12 @@ import sys
 import socket
 import binascii
 import threading
+import time
 
-log = []
+log = {}
 class TCP_header():
 
-    def __init__(self, seq_num, ack_num, syn, ack):
+    def __init__(self, seq_num, ack_num, syn, ack, fin):
         self.source_prt = 0 # 16 bits
         self.destination_prt = 0 # 16 bits
         self.sequence_num = seq_num # 32 bits
@@ -17,11 +18,11 @@ class TCP_header():
         # self.CWR = 0 # 1 bit
         # self.ECE = 0 # 1 bit
         # self.URG = 0 # 1 bit
-        self.ACK = syn # ack flag 0 if not ack, 1 if syn-ack or ack
+        self.ACK = ack # ack flag 0 if not ack, 1 if syn-ack or ack
         # self.PSH = 0 # 1 bit
         # self.RST = 0 # 1 bit
-        self.SYN = ack # syn flag 0 if not syn, 1 if syn-ack or syn
-        # self.FIN = fin # 1 bit
+        self.SYN = syn # syn flag 0 if not syn, 1 if syn-ack or syn
+        self.FIN = fin # 1 bit
         # self.receive_window = 0 # 16 bits
         # self.internet_checksum = 0 # 16 bits
         # self.urgent_data_ptr = 0 # 16 bits
@@ -63,51 +64,74 @@ class TCP_header():
         return bits.encode()
 
 
-# def send_synack(message, DNS_IP, DNS_PORT, type, length, client_socket):
-#     READ_BUFFER = 1024  # size of the buffer to read in the received UDP packet.
-
-#     address = (DNS_IP, DNS_PORT)
-
-#     client = client_socket  # Internet, UDP.
-#     # send message to given address
-
-#     client.sendto(message, address)
-#     logger(53, DNS_PORT, type, length)
-#     # receive message
-
-#     client.close()
-
-
 class Client():
     def __init__(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.state = None
         self.connection = False
     
     def handshake(self, address, port):
-    
+        
+        global log
         # first handshake
-        message = TCP_header()
+        message = TCP_header(0,0,0,0,0)
         message.SYN = 1
 
-        self.socket.sendto(message, (address, port))
+        self.socket.sendto(message.get_bits(), (address, port))
 
         # receive second handshake
         data, addr = self.socket.recvfrom(1024)
 
         message = bits_to_header(data)
-
-
         
         if(message.SYN == 1 and message.ACK == 1):
             # send third handshake
-            message.SYN = 0
-            self.socket.sendto(message, (address, port))
-        
-        self.udpconnect()
+
+            self.connection = True
             
-    def udpconnect(socket, address, port):
-        pass
+            log[address].append(port) # get correct port for connecting socket
+            print("Client Connection Established - IP: " + str(address) + " Port: " + str(port))
+            message.SYN = 0
+
+            self.socket.sendto(message.get_bits(), (address, port))
+        
+        if self.connection == True:
+            self.udpconnect(address, port)
+            
+    def udpconnect(self, address, port):
+
+        try:
+            while self.connection:
+                self.socket.sendto(b"Ping", (address,port)) 
+                data, addr = self.socket.recvfrom(1024)
+
+                time.sleep(4)
+        except KeyboardInterrupt:
+            print("Keyboard Interruption")
+            self.closeconnection(address,port)
+    
+    def closeconnection(self, address, port):
+        ack = False
+
+        while ack != True:
+            message = TCP_header(0,0,0,0,1)
+            self.socket.sendto(message.get_bits(), (address,port)) 
+
+            data, addr = self.socket.recvfrom(1024)
+            message = bits_to_header(data)
+
+            if message.FIN == 1:
+                break
+        
+        self.socket.close()
+
+
+if __name__ == '__main__':
+    pass
+
+        
+
+
+
 
 
 
