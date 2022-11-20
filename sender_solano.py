@@ -66,7 +66,7 @@ class TCP_header():
 class Client():
     def __init__(self):
         self.client_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.client_sock.bind(("127.0.0.1", 2012))
+        self.client_sock.bind(("127.0.0.1", 0))
         self.connection = False
         self.data_port = 53
     
@@ -78,6 +78,9 @@ class Client():
         # first handshake (self, dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53
             message_syn = TCP_header(port,0,0,0,0,0, "")
             message_syn.custom_message(0,1,0)
+
+            curr_seq = 0
+            curr_ack = 0
 
             print("start handshake")
             log.append([address, port, "SYN", len(message_syn.get_bits())])
@@ -92,8 +95,11 @@ class Client():
             data_port = message_synack.destination_prt
             self.data_port = data_port
 
+            curr_seq = message_synack.ACK_num
+            curr_ack = message_synack.sequence_num
+
             if message_synack.FIN == 1:
-                self.closeconnection(1, address, port)
+                self.closeconnection(1, message_synack.ACK_num, message_synack.sequence_num, address, port)
                 
             
             if(message_synack.SYN == 1 and message_synack.ACK == 1):
@@ -110,7 +116,7 @@ class Client():
             return ""
         except KeyboardInterrupt:
             print("Keyboard Interruption")
-            self.closeconnection(0, address, port)
+            self.closeconnection(0, curr_seq, curr_ack, address, port)
             
     def udpconnect(self, prev_message, address, port):
 
@@ -151,7 +157,7 @@ class Client():
                 if message.data == "Pong":
                     cur_seq = message.ACK_num
                     cur_ack = len(message.data) + message.sequence_num
-                    time.sleep(2)
+                    time.sleep(3)
                     continue
                 else:
                     print("wrong data from server")
@@ -173,7 +179,7 @@ class Client():
             count = 0
             while ack != True or count != 3:
                 # dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53):
-                message = TCP_header(port,cur_seq,cur_ack,1,"")
+                message = TCP_header(port,cur_seq,cur_ack+1,0,0,1,"")
 
                 log.append([address, port, "FIN", len(message.get_bits())])
                 self.client_sock.sendto(message.get_bits(), (address,port)) 
@@ -185,7 +191,7 @@ class Client():
                     break
         
         elif putah == 1:
-            message = TCP_header(port,cur_ack,cur_seq+1,0,1,0,"")
+            message = TCP_header(port,cur_seq,cur_ack+1,0,1,0,"")
 
             log.append([address, port, "ACK", len(message.get_bits())])
             self.client_sock.sendto(message.get_bits(), (address,port))      
@@ -236,3 +242,4 @@ if __name__ == '__main__':
 # client: s=1, a=1 
 # client: s=1 a=1 server: s=1 a=5
 # cleint: s=5 a=5 server: s=5 a=9
+# client: s=9 a=9

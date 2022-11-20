@@ -22,7 +22,7 @@ class TCP_header():
         self.source_prt = src_port  # 16 bits
         self.destination_prt = dst_port # 16 bits
         self.sequence_num = seq_num  # 32 bits
-        self.ACK_num = ack # 32 bits
+        self.ACK_num = ack_num # 32 bits
         # self.header_length = 0 # 4 bits
         # self.unused = 0 # 4 bits
         # self.CWR = 0 # 1 bit
@@ -96,22 +96,25 @@ class Server():
         try:
             packet, address = self.welcome_socket.recvfrom(1024)  # check this size
             print("handshake get SYN: ", packet)
-            message = self.bits_to_header(packet)
+            message_syn = self.bits_to_header(packet)
 
-            print(message.SYN)
+            print(message_syn.SYN)
 
-            if message.get_type() == "FIN":
-                self.welcoming_closeconnection(0, address[0], address[1], self.welcome_socket.getsockname()[1])
+            cur_seq = message_syn.ACK_num
+            cur_ack = message_syn.sequence_num
+
+            if message_syn.get_type() == "FIN":
+                self.welcoming_closeconnection(0, cur_seq, cur_ack, address[0], address[1], self.welcome_socket.getsockname()[1])
                 return 0
 
-            if message.get_type() == "SYN":
+            if message_syn.get_type() == "SYN":
                 print("got syn")
                 print(address)
                 connection.data_port = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 connection.data_port.bind(("127.0.0.1", 0))
 
                 print(connection.data_port.getsockname()[1])
-                synack = TCP_header(connection.data_port.getsockname()[1], 0, 0, 0, 0, 0, "", self.server_port)
+                synack = TCP_header(connection.data_port.getsockname()[1], 0, message_syn.sequence_num+1,0,0,0,"", self.server_port)
                 synack.custom_message(1, 1, 0)
 
                 connection.got_syn = 1
@@ -121,9 +124,12 @@ class Server():
             packet2, address2 = self.welcome_socket.recvfrom(1024)
             message2 = self.bits_to_header(packet2)
 
+            cur_seq = message2.ACK_num
+            cur_ack = message2.sequence_num
+
             if message2.get_type() == "FIN":
                 print("interruption")
-                self.welcoming_closeconnection(0, address[0], address[1], self.welcome_socket.getsockname()[1])
+                self.welcoming_closeconnection(0, cur_seq, cur_ack, address[0], address[1], self.welcome_socket.getsockname()[1])
                 return 0
 
             if message2.get_type() == "ACK" and connection.got_syn == 1:
@@ -140,7 +146,7 @@ class Server():
 
         except KeyboardInterrupt:
             print("Keyboard Interruption")
-            self.welcoming_closeconnection(1, address[0], address[1], self.welcome_socket.getsockname()[1])
+            self.welcoming_closeconnection(1, cur_seq, cur_ack, address[0], address[1], self.welcome_socket.getsockname()[1])
             return 0
 
     def data(self):
@@ -151,8 +157,10 @@ class Server():
                 # self.data_socket.listen()
                 packet, address = self.curconnection.data_port.recvfrom(1024)  # check this size
                 message = self.bits_to_header(packet)
+                cur_seq = message.ACK_num
+                cur_ack = message.sequence_num
                 if message.get_type() == "FIN":
-                    self.data_closeconnection(0, address[0], address[1], self.curconnection.data_port.getsockname()[
+                    self.data_closeconnection(0, cur_seq, cur_ack, address[0], address[1], self.curconnection.data_port.getsockname()[
                         1])  # figure out how to end the connection here
                     break
                 print(packet)
@@ -162,7 +170,15 @@ class Server():
                     print("wrong data")
                     print(message.data)
 
-                response = TCP_header(address[1], 0, 0, 0, 0, 0, "Pong", self.curconnection.data_port.getsockname()[1])
+                bits = len(message.data)
+
+                print("received: ack:", message.ACK_num, " sequence: ", message.sequence_num)
+                print(packet)
+
+                print("break")
+
+                time.sleep(3)
+                response = TCP_header(address[1], message.ACK_num, message.sequence_num+bits, 0, 0, 0, "Pong", self.curconnection.data_port.getsockname()[1])
                 packet = response.get_bits()
 
                 log.append([address[0], address[1], "DATA", len(packet)])
@@ -171,7 +187,7 @@ class Server():
 
         except KeyboardInterrupt:
             print("Server Keyboard Interruption")
-            self.data_closeconnection(1, address[0], address[1], self.curconnection.data_port.getsockname()[1])
+            self.data_closeconnection(1, cur_seq, cur_ack, address[0], address[1], self.curconnection.data_port.getsockname()[1])
 
     # def thread_handshake(self, connection):
     #     connection.th = threading.Thread(target=self.handshake(connection))#create new thread for a new client connection
@@ -204,11 +220,11 @@ class Server():
         except:
             data_string = ""
         return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data_string, src_port)
-    def welcoming_closeconnection(self, putah, address, dst_port, src_port):
+    def welcoming_closeconnection(self, putah, cur_seq, cur_ack, address, dst_port, src_port):
         if putah == 1:
             ack = False
             while ack != True:
-                message = TCP_header(dst_port,0,0,0,0,0, "", src_port)
+                message = TCP_header(dst_port,cur_seq, cur_ack+1,0,0,0, "", src_port)
                 message.FIN = 1
 
                 log.append([address, dst_port, "FIN", len(message.get_bits())])
@@ -220,7 +236,7 @@ class Server():
                 if message.ACK == 1:
                     break
         elif putah == 0:
-            message = TCP_header(dst_port,0,0,0,0,0, "", src_port)
+            message = TCP_header(dst_port,cur_seq, cur_ack+1,0,0,0, "", src_port)
             message.ACK = 1
 
             log.append([address, dst_port, "ACK", len(message.get_bits())])
@@ -230,7 +246,7 @@ class Server():
         self.welcome_socket.close()
         self.welcome_close = 1
 
-    def data_closeconnection(self, putah, address, dst_port, src_port):
+    def data_closeconnection(self, putah, cur_seq, cur_ack, address, dst_port, src_port):
 
         # putah = 0 -> client initiated close
         # putah = 1 -> server initiated close
@@ -239,7 +255,7 @@ class Server():
             ack = False
             count = 0
             while ack != True or count != 3:
-                message = TCP_header(dst_port,0,0,0,0,0, "", src_port)
+                message = TCP_header(dst_port,cur_seq, cur_ack+1,0,0,0, "", src_port)
                 message.FIN = 1
 
                 print("in data fin")
@@ -254,7 +270,7 @@ class Server():
                     break
                 count += 1
         elif putah == 0:
-            message = TCP_header(dst_port,0,0,0,0,0, "", src_port)
+            message = TCP_header(dst_port,cur_seq, cur_ack+1,0,0,0, "", src_port)
             message.ACK = 1
 
             log.append([address, dst_port, "ACK", len(message.get_bits())])
