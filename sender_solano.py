@@ -58,8 +58,8 @@ class TCP_header():
         bits += '{0:01b}'.format(self.ACK)
         bits += '{0:01b}'.format(self.FIN)
         if self.data != "":
-
-            bits += self.data
+            for x in self.data:
+                    bits += format(ord(x), '08b')
         return bits.encode()
 
 
@@ -133,6 +133,7 @@ class Client():
                 print("sending", "seq: ", message.sequence_num, "ack: ", message. ACK_num)
                 temp = message.get_bits()
                 print(message.get_bits())
+                print("message length: ", len(message.get_bits()))
 
                 temp = bits_to_header(temp)
                 print(temp.ACK_num, temp.sequence_num)
@@ -140,7 +141,7 @@ class Client():
                 print("break")
                 
 
-                log.append([address, port, "DATA", len(message.get_bits()), cur_seq, cur_ack])
+                log.append([address, port, "DATA", len(message.get_bits())])
                 self.client_sock.sendto(message.get_bits(), (address,port)) 
                 data, addr = self.client_sock.recvfrom(1024)
 
@@ -165,6 +166,69 @@ class Client():
                 
         except KeyboardInterrupt:
             print("Keyboard Interruption")
+            self.closeconnection(0,  cur_seq, cur_ack, address,port)
+
+    def udpconnect_readfile(self, prev_message, address, port, file):
+        cur_seq = prev_message[0]
+        cur_ack = prev_message[1]
+
+        file_text = open(file, "r")
+        not_eof = True
+
+        try:
+            while self.connection and not_eof:
+                print("in udp connect")
+
+                # read file
+
+                file_read = file_text.read(112)
+                if not file_read:
+                    print("End Of File")
+                    not_eof = False
+                    break
+
+                message = TCP_header(port,cur_seq,cur_ack,0,0,0, file_read)
+                print("line: ", message.data)
+
+
+                print("sending", "seq: ", message.sequence_num, "ack: ", message. ACK_num)
+                temp = message.get_bits()
+                print(message.get_bits())
+
+                temp = bits_to_header(temp)
+                print(temp.data)
+
+                print("break")
+                
+
+                log.append([address, port, "DATA", len(message.get_bits())])
+                self.client_sock.sendto(message.get_bits(), (address,port)) 
+                data, addr = self.client_sock.recvfrom(1024)
+
+                message = bits_to_header(data)
+
+                print(data)
+
+                print("client: ", message.data, "seq: ", message.sequence_num, "ack: ", message. ACK_num)
+                
+                if message.FIN == 1:
+                    self.closeconnection(1, cur_seq, cur_ack, address, port)
+                    break
+                
+                if message.ACK == 1:
+                    print("received: ack: ", message.ACK_num, " seq: ",message.sequence_num )
+                    cur_seq = message.ACK_num
+                    cur_ack = 1 + message.sequence_num
+                    continue
+                else:
+                    print("wrong data from server")
+                    self.closeconnection(2, cur_seq, cur_ack,  address, port)
+            
+            file_text.close()
+                
+        except KeyboardInterrupt:
+            print("Keyboard Interruption")
+            file_text.close()
             self.closeconnection(0,  cur_seq, cur_ack, address,port)
     
     def closeconnection(self, putah, cur_seq, cur_ack, address, port):
@@ -212,11 +276,39 @@ def bits_to_header(bits):
     fin = int(bits[98], 2)
     try:
         data_string = bits[99:]
+        num = len(data_string)/8 
+        data = ""
+
+        for x in range(int(num)):
+            start = x*8
+            end = (x+1)*8
+            data += chr(int(str(data_string[start:end]),2))
+
     except:
-        data_string = ""
+        data = ""
 
-    return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data_string, src_port)
+    return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data, src_port)
 
+def test_reading(file):
+    file_text = open(file, "r")
+    not_eof = True
+
+    while not_eof:
+        file_read = file_text.read()
+        if not file_read:
+            print("End Of File")
+            not_eof = False
+            break
+        
+        bit_string = ""
+
+        for x in file_read:
+            bit_string += format(ord(x), '08b')
+        
+        print(file_read)
+        print(bit_string)
+
+    file_text.close()
 
 if __name__ == '__main__':
     server_ip = sys.argv[2]
@@ -228,10 +320,12 @@ if __name__ == '__main__':
     print(client.data_port)
     if client.connection == True and handshake_message != "":
             time.sleep(4)
-            client.udpconnect(handshake_message, server_ip, client.data_port)
+            client.udpconnect_readfile(handshake_message, server_ip, client.data_port, sys.argv[6])
 
     for i in range(0,len(log)):
        print(log[i][0] , " | " , log[i][1] , " | " , log[i][2] , " | " , log[i][3])
+
+    # test_reading(sys.argv[1])
             
 
 

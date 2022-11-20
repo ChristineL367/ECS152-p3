@@ -162,24 +162,21 @@ class Server():
                 if message.get_type() == "FIN":
                     self.data_closeconnection(0, cur_seq, cur_ack, address[0], address[1], self.curconnection.data_port.getsockname()[1])  # figure out how to end the connection here
                     break
-                print(packet)
-                if message.data == "Ping":
-                    print("correct ping")
-                else:
-                    print("wrong data")
-                    print(message.data)
-                
+                print("packet length: ", packet)
+                print("oacket", packet)
+                print("message", message.data)
+                print("message length: ", len(message.data))
 
-                bits = len(message.data)
+                bits = len(packet.decode())
 
                 print("received: ack:", message.ACK_num, " sequence: ", message.sequence_num)
-                print(packet)
 
                 print("break")
 
-                time.sleep(3)
-                response = TCP_header(address[1], message.ACK_num, message.sequence_num+bits, 0, 0, 0, "Pong", self.curconnection.data_port.getsockname()[1])
+                response = TCP_header(address[1], message.ACK_num, message.sequence_num+bits, 0, 1, 0, "", self.curconnection.data_port.getsockname()[1])
                 packet = response.get_bits()
+
+                print("sending: ack:", message.sequence_num+bits, " sequence: ", message.ACK_num)
 
                 log.append([address[0], address[1], "DATA", len(packet)])
                 self.send_packet(packet, address[0], address[1], self.curconnection.data_port)
@@ -214,10 +211,18 @@ class Server():
         print("in bits to header 1")
         try:
             data_string = bits[99:]
-            print("in bits to header", data_string)
+            print("data_string: ", data_string)
+            num = len(data_string)/8 
+            data = ""
+
+            for x in range(int(num)):
+                start = x*8
+                end = (x+1)*8
+                data += chr(int(str(data_string[start:end]),2))
+            print(data)
         except:
-            data_string = ""
-        return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data_string, src_port)
+            data = ""
+        return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data, src_port)
     
     def welcoming_closeconnection(self, putah, cur_seq, cur_ack,address, dst_port, src_port):
         if putah == 1:
