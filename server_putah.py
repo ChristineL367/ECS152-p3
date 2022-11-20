@@ -117,6 +117,7 @@ class Server():
                 synack = TCP_header(connection.data_port.getsockname()[1], 0, message_syn.sequence_num+1,0,0,0,"", self.server_port)
                 synack.custom_message(1, 1, 0)
 
+                print("sending: ", synack.get_bits())
                 connection.got_syn = 1
                 log.append([address[0], address[1], "SYNACK", len(synack.get_bits())])
                 self.send_packet(synack.get_bits(), address[0], address[1], self.welcome_socket)
@@ -143,46 +144,6 @@ class Server():
             else:
                 print("Couldn't establish handshake...")
                 return 0
-
-        except KeyboardInterrupt:
-            print("Keyboard Interruption")
-            self.welcoming_closeconnection(1, cur_seq, cur_ack, address[0], address[1], self.welcome_socket.getsockname()[1])
-            return 0
-
-    def data(self):
-
-        try:
-            while (1):
-                # try:
-                # self.data_socket.listen()
-                packet, address = self.curconnection.data_port.recvfrom(1024)  # check this size
-                message = self.bits_to_header(packet)
-                cur_seq = message.ACK_num
-                cur_ack = message.sequence_num
-                if message.get_type() == "FIN":
-                    self.data_closeconnection(0, cur_seq, cur_ack, address[0], address[1], self.curconnection.data_port.getsockname()[
-                        1])  # figure out how to end the connection here
-                    break
-                print(packet)
-                if message.data == "Ping":
-                    print("correct ping")
-                else:
-                    print("wrong data")
-                    print(message.data)
-
-                bits = len(message.data)
-
-                print("received: ack:", message.ACK_num, " sequence: ", message.sequence_num)
-                print(packet)
-
-                print("break")
-
-                time.sleep(3)
-                response = TCP_header(address[1], message.ACK_num, message.sequence_num+bits, 0, 0, 0, "Pong", self.curconnection.data_port.getsockname()[1])
-                packet = response.get_bits()
-
-                log.append([address[0], address[1], "DATA", len(packet)])
-                self.send_packet(packet, address[0], address[1], self.curconnection.data_port)
 
 
         except KeyboardInterrupt:

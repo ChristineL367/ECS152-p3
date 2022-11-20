@@ -80,6 +80,7 @@ class Client():
             message.custom_message(0, 1, 0)
 
             print("start handshake")
+            print(message.get_bits())
             log.append([address, port, "SYN", len(message.get_bits())])
             self.client_sock.sendto(message.get_bits(), (address, port))
 
@@ -87,10 +88,13 @@ class Client():
             data, addr = self.client_sock.recvfrom(1024)
             time.sleep(3)
             print("get synack")
+
+            print(data)
             message_synack = bits_to_header(data)
 
-            data_port = message.destination_prt
+            data_port = message_synack.destination_prt
             self.data_port = data_port
+            print("port received: ", self.data_port)
 
             if message_synack.FIN == 1:
                 self.closeconnection(1, address, port)
