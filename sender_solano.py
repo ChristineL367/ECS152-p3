@@ -308,9 +308,9 @@ if __name__ == '__main__':
     print(client.data_port)
     if client.connection == True and handshake_message != "":
         time.sleep(4)
-        start = time.perfcounter()
+        start = time.perf_counter()
         client.udpconnect(handshake_message, server_ip, client.data_port, sys.argv[6])
-        end = time.perfcounter()
+        end = time.perf_counter()
         time_elapsed = start - end
         print("Time to send file:", time_elapsed)
         percent = client.packet_losses/client.packets_sent
