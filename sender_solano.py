@@ -5,37 +5,38 @@ import threading
 import time
 
 log = []
+
+
 class TCP_header():
 
-    def __init__(self, dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53):
-        self.source_prt = src_port # 16 bits
-        self.destination_prt = dst_port # 16 bits
-        self.sequence_num = seq_num # 32 bits
-        self.ACK_num = ack_num # 32 bits
+    def __init__(self, dst_port, seq_num, ack_num, syn, ack, fin, data, src_port=53):
+        self.source_prt = src_port  # 16 bits
+        self.destination_prt = dst_port  # 16 bits
+        self.sequence_num = seq_num  # 32 bits
+        self.ACK_num = ack_num  # 32 bits
         # self.header_length = 0 # 4 bits
         # self.unused = 0 # 4 bits
         # self.CWR = 0 # 1 bit
         # self.ECE = 0 # 1 bit
         # self.URG = 0 # 1 bit
-        self.ACK = ack # ack flag 0 if not ack, 1 if syn-ack or ack
+        self.ACK = ack  # ack flag 0 if not ack, 1 if syn-ack or ack
         # self.PSH = 0 # 1 bit
         # self.RST = 0 # 1 bit
-        self.SYN = syn # syn flag 0 if not syn, 1 if syn-ack or syn
-        self.FIN = fin # 1 bit
+        self.SYN = syn  # syn flag 0 if not syn, 1 if syn-ack or syn
+        self.FIN = fin  # 1 bit
         # self.receive_window = 0 # 16 bits
         # self.internet_checksum = 0 # 16 bits
         # self.urgent_data_ptr = 0 # 16 bits
         # self.options = 0
         self.data = data
 
-    
     def custom_message(self, ack, syn, fin):
 
-        self.ACK = ack #ack flag 0 if not ack, 1 if syn-ack or ack
+        self.ACK = ack  # ack flag 0 if not ack, 1 if syn-ack or ack
 
-        self.SYN = syn #syn flag 0 if not syn, 1 if syn-ack or syn
+        self.SYN = syn  # syn flag 0 if not syn, 1 if syn-ack or syn
         self.FIN = fin
-    
+
     def get_type(self):
         if self.ACK == 1 and self.SYN == 1:
             return "SYN-ACK"
@@ -47,7 +48,7 @@ class TCP_header():
             return "FIN"
         elif self.data == "":
             return "DATA"
-    
+
     # change this
     def get_bits(self):
         bits = '{0:016b}'.format(self.source_prt)
@@ -58,8 +59,7 @@ class TCP_header():
         bits += '{0:01b}'.format(self.ACK)
         bits += '{0:01b}'.format(self.FIN)
         if self.data != "":
-            for x in self.data:
-                    bits += format(ord(x), '08b')
+            bits += self.data
         return bits.encode()
 
 
@@ -75,15 +75,16 @@ class Client():
         self.RTTVAR = 0
         self.rtts = []
         self.rrts_dev = []
-        #self.client_sock.settimeout(self.timeout)
+        # self.client_sock.settimeout(self.timeout)
+
     def handshake(self, address, port):
-        
+
         global log
 
         try:
-        # first handshake (self, dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53
-            message_syn = TCP_header(port,0,0,0,0,0, "")
-            message_syn.custom_message(0,1,0)
+            # first handshake (self, dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53
+            message_syn = TCP_header(port, 0, 0, 0, 0, 0, "")
+            message_syn.custom_message(0, 1, 0)
 
             curr_seq = 0
             curr_ack = 0
@@ -108,8 +109,7 @@ class Client():
                     print("RESEND")
                     continue
 
-
-            #time.sleep(3)
+            # time.sleep(3)
             print("get synack")
             message_synack = bits_to_header(data)
 
@@ -121,28 +121,25 @@ class Client():
 
             if message_synack.FIN == 1:
                 self.closeconnection(1, message_synack.ACK_num, message_synack.sequence_num, address, port)
-                
-            
-            if(message_synack.SYN == 1 and message_synack.ACK == 1):
+
+            if (message_synack.SYN == 1 and message_synack.ACK == 1):
                 # send third handshake
                 print("check synack")
                 self.connection = True
-                message_ack = TCP_header(port,message_synack.ACK_num, message_synack.sequence_num+1,0,0,0, "")
-                message_ack.custom_message(1,0,0)
+                message_ack = TCP_header(port, message_synack.ACK_num, message_synack.sequence_num + 1, 0, 0, 0, "")
+                message_ack.custom_message(1, 0, 0)
 
                 log.append([address, port, "ACK", len(message_ack.get_bits())])
 
                 self.client_sock.sendto(message_ack.get_bits(), (address, port))
 
-                return [message_ack.ACK_num, message_synack.sequence_num+1]
+                return [message_ack.ACK_num, message_synack.sequence_num + 1]
 
-
-            
             return ""
         except KeyboardInterrupt:
             print("Keyboard Interruption")
             self.closeconnection(0, curr_seq, curr_ack, address, port)
-            
+
     def udpconnect(self, prev_message, address, port):
 
         global log
@@ -153,19 +150,18 @@ class Client():
         try:
             while self.connection:
                 print("in udp connect")
-                message = TCP_header(port,cur_seq,cur_ack,0,0,0, "Ping")
+                message = TCP_header(port, cur_seq, cur_ack, 0, 0, 0, "Ping")
 
-                print("sending", "seq: ", message.sequence_num, "ack: ", message. ACK_num)
+                print("sending", "seq: ", message.sequence_num, "ack: ", message.ACK_num)
                 temp = message.get_bits()
                 print(message.get_bits())
-                print("message length: ", len(message.get_bits()))
 
                 temp = bits_to_header(temp)
                 print(temp.ACK_num, temp.sequence_num)
 
                 print("break")
                 log.append([address, port, "DATA", len(message.get_bits()), cur_seq, cur_ack])
-                #self.client_sock.settimeout(self.timeout)
+                # self.client_sock.settimeout(self.timeout)
                 while (1):
                     self.client_sock.sendto(message.get_bits(), (address, port))
                     try:
@@ -174,79 +170,76 @@ class Client():
                         data, addr = self.client_sock.recvfrom(1024)
                         self.client_sock.settimeout(None)
                         end = time.perf_counter()
-                        new_est = (1-.125)*self.SRTT + .125*(start-end)
-                        new_dev = (1 - .25) * self.RTTVAR + .25 * abs(self.SRTT-((start-end)/2))
+                        new_est = (1 - .125) * self.SRTT + .125 * (start - end)
+                        new_dev = (1 - .25) * self.RTTVAR + .25 * abs(self.SRTT - ((start - end) / 2))
                         self.SRTT = new_est
 
                         self.RTTVAR = new_dev
                         self.timeout = self.SRTT + 4 * self.RTTVAR
                         if self.timeout < 1:
                             self.timeout = 1
-                        #self.client_sock.settimeout(self.timeout)
+                        # self.client_sock.settimeout(self.timeout)
                         message = bits_to_header(data)
 
                         print(data)
 
-                        print("client: ", message.data, "seq: ", message.sequence_num, "ack: ", message. ACK_num)
-                        
+                        print("client: ", message.data, "seq: ", message.sequence_num, "ack: ", message.ACK_num)
+
                         if message.FIN == 1:
                             self.closeconnection(1, cur_seq, cur_ack, address, port)
                             break
-                
-                # if message.ACK == 1:
-                #     print("received: ack: ", message.ACK_num, " seq: ",message.sequence_num )
-                #     cur_seq = message.ACK_num
-                #     cur_ack = 1 + message.sequence_num
-                #     continue
-                # else:
-                #     print("wrong data from server")
-                #     self.closeconnection(2, cur_seq, cur_ack,  address, port)
+
+                        # if message.data == "Pong":
+                        #     cur_seq = message.ACK_num
+                        #     cur_ack = len(message.data) + message.sequence_num
+                        #     time.sleep(3)
+                        #     continue
+                        # else:
+                        #     print("wrong data from server")
+                        #     self.closeconnection(2, cur_seq, cur_ack,  address, port)
                         break
                     except socket.timeout:
-                                #self.timeout +=1
-                            print("RESEND")
-                            continue
-        
-            self.closeconnection(2, cur_seq, cur_ack,  address, port)
-                
+                        # self.timeout +=1
+                        print("RESEND")
+                        continue
+
         except KeyboardInterrupt:
             print("Keyboard Interruption")
-            file_text.close()
-            self.closeconnection(0,  cur_seq, cur_ack, address,port)
-    
+            self.closeconnection(0, cur_seq, cur_ack, address, port)
+
     def closeconnection(self, putah, cur_seq, cur_ack, address, port):
 
         # putah = 0 -> client initiated close
         # putah = 1 -> server initiated close
         # putah = 2 -> wrong data
-        #global log
+        # global log
 
         if putah == 0:
             ack = False
             count = 0
             while ack != True or count != 3:
                 # dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53):
-                message = TCP_header(port,cur_seq,cur_ack+1,0,0,1,"")
+                message = TCP_header(port, cur_seq, cur_ack + 1, 0, 0, 1, "")
 
                 log.append([address, port, "FIN", len(message.get_bits())])
-                self.client_sock.sendto(message.get_bits(), (address,port)) 
+                self.client_sock.sendto(message.get_bits(), (address, port))
 
                 data, addr = self.client_sock.recvfrom(1024)
                 message = bits_to_header(data)
 
                 if message.ACK == 1:
                     break
-        
+
         elif putah == 1:
-            message = TCP_header(port,cur_seq,cur_ack+1,0,1,0,"")
+            message = TCP_header(port, cur_seq, cur_ack + 1, 0, 1, 0, "")
 
             log.append([address, port, "ACK", len(message.get_bits())])
-            self.client_sock.sendto(message.get_bits(), (address,port))      
-            
-        
+            self.client_sock.sendto(message.get_bits(), (address, port))
+
         print("connection closed")
         self.connection == 0
         self.client_sock.close()
+
 
 def bits_to_header(bits):
     bits = bits.decode()
@@ -259,39 +252,11 @@ def bits_to_header(bits):
     fin = int(bits[98], 2)
     try:
         data_string = bits[99:]
-        num = len(data_string)/8 
-        data = ""
-
-        for x in range(int(num)):
-            start = x*8
-            end = (x+1)*8
-            data += chr(int(str(data_string[start:end]),2))
-
     except:
-        data = ""
+        data_string = ""
 
-    return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data, src_port)
+    return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data_string, src_port)
 
-def test_reading(file):
-    file_text = open(file, "r")
-    not_eof = True
-
-    while not_eof:
-        file_read = file_text.read()
-        if not file_read:
-            print("End Of File")
-            not_eof = False
-            break
-        
-        bit_string = ""
-
-        for x in file_read:
-            bit_string += format(ord(x), '08b')
-        
-        print(file_read)
-        print(bit_string)
-
-    file_text.close()
 
 if __name__ == '__main__':
     server_ip = sys.argv[2]
@@ -302,16 +267,11 @@ if __name__ == '__main__':
     print("client connectione established")
     print(client.data_port)
     if client.connection == True and handshake_message != "":
-            time.sleep(4)
-            client.udpconnect_readfile(handshake_message, server_ip, client.data_port, sys.argv[6])
+        time.sleep(4)
+        client.udpconnect(handshake_message, server_ip, client.data_port)
 
-    for i in range(0,len(log)):
-       print(log[i][0] , " | " , log[i][1] , " | " , log[i][2] , " | " , log[i][3])
-
-    # test_reading(sys.argv[1])
-            
-
-
+    for i in range(0, len(log)):
+        print(log[i][0], " | ", log[i][1], " | ", log[i][2], " | ", log[i][3])
 
 # handshake:
 
