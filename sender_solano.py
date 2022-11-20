@@ -76,6 +76,8 @@ class Client():
         self.RTTVAR = 0
         self.rtts = []
         self.rrts_dev = []
+        self.packet_losses = 0
+        self.packets_sent = 0
         # self.client_sock.settimeout(self.timeout)
 
     def handshake(self, address, port):
@@ -93,9 +95,12 @@ class Client():
             print("start handshake")
             log.append([address, port, "SYN", len(message_syn.get_bits())])
             while (1):
+                self.packets_sent +=1
+                start = time.perf_counter()
+                self.client_sock.sendto(message_syn.get_bits(), (address, port))
                 try:
-                    start = time.perf_counter()
-                    self.client_sock.sendto(message_syn.get_bits(), (address, port))
+                   
+                    
                     # receive second handshake
                     self.client_sock.settimeout(self.timeout)
                     data, addr = self.client_sock.recvfrom(1024)
@@ -107,6 +112,7 @@ class Client():
                     self.timeout = self.SRTT + max(6, 4 * self.RTTVAR)
                     break
                 except socket.timeout:
+                    self.packet_losses +=1 
                     print("RESEND")
                     continue
 
@@ -175,9 +181,11 @@ class Client():
                 log.append([address, port, "DATA", len(message.get_bits()), cur_seq, cur_ack])
                 # self.client_sock.settimeout(self.timeout)
                 while (1):
+                    start = time.perf_counter()
                     self.client_sock.sendto(message.get_bits(), (address, port))
+                    self.packets_sent +=1
                     try:
-                        start = time.perf_counter()
+                        
                         self.client_sock.settimeout(self.timeout)
                         data, addr = self.client_sock.recvfrom(1024)
                         self.client_sock.settimeout(None)
@@ -192,26 +200,28 @@ class Client():
                             self.timeout = 1
                         # self.client_sock.settimeout(self.timeout)
                         message = bits_to_header(data)
-
+                        if message.gettype() != "ACK":
+                            continue
                         if message.FIN == 1:
                             file_text.close()
                             self.closeconnection(1, cur_seq, cur_ack, address, port)
                             break
 
                         if message.ACK == 1:
+                            print(data)
+                            print("client: ", message.data, "seq: ", message.sequence_num, "ack: ", message.ACK_num)
                             print("received: ack: ", message.ACK_num, " seq: ",message.sequence_num )
                             cur_seq = message.ACK_num
                             cur_ack = 1 + message.sequence_num
-                            continue
+                            break
                         else:
                             print("wrong data from server")
                             file_text.close()
                             self.closeconnection(2, cur_seq, cur_ack,  address, port)
 
-                        print(data)
+                      
 
-                        print("client: ", message.data, "seq: ", message.sequence_num, "ack: ", message.ACK_num)
-
+                        
                         # if message.data == "Pong":
                         #     cur_seq = message.ACK_num
                         #     cur_ack = len(message.data) + message.sequence_num
@@ -223,6 +233,7 @@ class Client():
                         break
                     except socket.timeout:
                         # self.timeout +=1
+                        self.packet_losses +=1
                         print("RESEND")
                         continue
                 
@@ -297,8 +308,13 @@ if __name__ == '__main__':
     print(client.data_port)
     if client.connection == True and handshake_message != "":
         time.sleep(4)
-        client.udpconnect(handshake_message, server_ip, client.data_port)
-
+        start = time.perfcounter()
+        client.udpconnect(handshake_message, server_ip, client.data_port, sys.argv[6])
+        end = time.perfcounter()
+        time_elapsed = start - end
+        print("Time to send file:", time_elapsed)
+        percent = client.packet_losses/client.packets_sent
+        print("Packet loss percent:", percent)
     for i in range(0, len(log)):
         print(log[i][0], " | ", log[i][1], " | ", log[i][2], " | ", log[i][3])
 
