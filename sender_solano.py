@@ -66,10 +66,16 @@ class TCP_header():
 class Client():
     def __init__(self):
         self.client_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
         self.client_sock.bind(("127.0.0.1", 0))
         self.connection = False
         self.data_port = 53
-    
+        self.timeout = 1
+        self.SRTT = 0
+        self.RTTVAR = 0
+        self.rtts = []
+        self.rrts_dev = []
+        #self.client_sock.settimeout(self.timeout)
     def handshake(self, address, port):
         
         global log
@@ -84,11 +90,26 @@ class Client():
 
             print("start handshake")
             log.append([address, port, "SYN", len(message_syn.get_bits())])
-            self.client_sock.sendto(message_syn.get_bits(), (address, port))
+            while (1):
+                try:
+                    start = time.perf_counter()
+                    self.client_sock.sendto(message_syn.get_bits(), (address, port))
+                    # receive second handshake
+                    self.client_sock.settimeout(self.timeout)
+                    data, addr = self.client_sock.recvfrom(1024)
+                    self.client_sock.settimeout(None)
+                    end = time.perf_counter()
+                    # VERY FIRST RTT VALUE WE GET!
+                    self.SRTT = start - end
+                    self.RTTVAR = self.SRTT / 2
+                    self.timeout = self.SRTT + max(6, 4 * self.RTTVAR)
+                    break
+                except socket.timeout:
+                    print("RESEND")
+                    continue
 
-            # receive second handshake
-            data, addr = self.client_sock.recvfrom(1024)
-            time.sleep(3)
+
+            #time.sleep(3)
             print("get synack")
             message_synack = bits_to_header(data)
 
@@ -110,8 +131,12 @@ class Client():
                 message_ack.custom_message(1,0,0)
 
                 log.append([address, port, "ACK", len(message_ack.get_bits())])
+
                 self.client_sock.sendto(message_ack.get_bits(), (address, port))
+
                 return [message_ack.ACK_num, message_synack.sequence_num+1]
+
+
             
             return ""
         except KeyboardInterrupt:
@@ -138,31 +163,49 @@ class Client():
                 print(temp.ACK_num, temp.sequence_num)
 
                 print("break")
-                
-
                 log.append([address, port, "DATA", len(message.get_bits()), cur_seq, cur_ack])
-                self.client_sock.sendto(message.get_bits(), (address,port)) 
-                data, addr = self.client_sock.recvfrom(1024)
+                #self.client_sock.settimeout(self.timeout)
+                while (1):
+                    self.client_sock.sendto(message.get_bits(), (address, port))
+                    try:
+                        start = time.perf_counter()
+                        self.client_sock.settimeout(self.timeout)
+                        data, addr = self.client_sock.recvfrom(1024)
+                        self.client_sock.settimeout(None)
+                        end = time.perf_counter()
+                        new_est = (1-.125)*self.SRTT + .125*(start-end)
+                        new_dev = (1 - .25) * self.RTTVAR + .25 * abs(self.SRTT-((start-end)/2))
+                        self.SRTT = new_est
 
-                message = bits_to_header(data)
+                        self.RTTVAR = new_dev
+                        self.timeout = self.SRTT + 4 * self.RTTVAR
+                        if self.timeout < 1:
+                            self.timeout = 1
+                        #self.client_sock.settimeout(self.timeout)
+                        message = bits_to_header(data)
 
-                print(data)
+                        print(data)
 
-                print("client: ", message.data, "seq: ", message.sequence_num, "ack: ", message. ACK_num)
-                
-                if message.FIN == 1:
-                    self.closeconnection(1, cur_seq, cur_ack, address, port)
-                    break
-                
-                if message.data == "Pong":
-                    cur_seq = message.ACK_num
-                    cur_ack = len(message.data) + message.sequence_num
-                    time.sleep(3)
-                    continue
-                else:
-                    print("wrong data from server")
-                    self.closeconnection(2, cur_seq, cur_ack,  address, port)
-                
+                        print("client: ", message.data, "seq: ", message.sequence_num, "ack: ", message. ACK_num)
+
+                        if message.FIN == 1:
+                            self.closeconnection(1, cur_seq, cur_ack, address, port)
+                            break
+
+                        # if message.data == "Pong":
+                        #     cur_seq = message.ACK_num
+                        #     cur_ack = len(message.data) + message.sequence_num
+                        #     time.sleep(3)
+                        #     continue
+                        # else:
+                        #     print("wrong data from server")
+                        #     self.closeconnection(2, cur_seq, cur_ack,  address, port)
+                        break
+                    except socket.timeout:
+                        #self.timeout +=1
+                        print("RESEND")
+                        continue
+
         except KeyboardInterrupt:
             print("Keyboard Interruption")
             self.closeconnection(0,  cur_seq, cur_ack, address,port)
