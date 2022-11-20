@@ -225,6 +225,7 @@ class Client():
                     self.closeconnection(2, cur_seq, cur_ack,  address, port)
             
             file_text.close()
+            self.closeconnection(2, cur_seq, cur_ack,  address, port)
                 
         except KeyboardInterrupt:
             print("Keyboard Interruption")
