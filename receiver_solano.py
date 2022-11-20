@@ -96,66 +96,67 @@ class Server():
         #self.welcome_socket.listen() #put this in main
 
         try:
-            packet, address = self.welcome_socket.recvfrom(1024) #check this size
-            x = random.randrange(0,100)
-            if x <= packet_loss:
-                return 0
-            print("handshake get SYN: ", packet)
-            message_syn = self.bits_to_header(packet)
+            while(1):
+                packet, address = self.welcome_socket.recvfrom(1024) #check this size
+                x = random.randrange(0,100)
+                if x <= packet_loss:
+                    continue
+                print("handshake get SYN: ", packet)
+                message_syn = self.bits_to_header(packet)
 
-            print(message_syn.SYN)
+                print(message_syn.SYN)
 
-            cur_seq = message_syn.ACK_num
-            cur_ack = message_syn.sequence_num
+                cur_seq = message_syn.ACK_num
+                cur_ack = message_syn.sequence_num
 
-            if message_syn.get_type() == "FIN":
-                self.welcoming_closeconnection(0, cur_seq, cur_ack,address[0], address[1], self.welcome_socket.getsockname()[1])
-                return 0
-            
-            if message_syn.get_type() == "SYN":
-                print("got syn")
-                print(address)
-                connection.data_port = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                connection.data_port.bind(("127.0.0.1", 0))
+                if message_syn.get_type() == "FIN":
+                    self.welcoming_closeconnection(0, cur_seq, cur_ack,address[0], address[1], self.welcome_socket.getsockname()[1])
+                    return 0
 
-                print(connection.data_port.getsockname()[1])
-                synack = TCP_header(connection.data_port.getsockname()[1], 0, message_syn.sequence_num+1,0,0,0,"", self.server_port)
-                synack.custom_message(1,1,0)
+                if message_syn.get_type() == "SYN":
+                    print("got syn")
+                    print(address)
+                    connection.data_port = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    connection.data_port.bind(("127.0.0.1", 0))
 
-                connection.got_syn = 1
-                log.append([address[0], address[1], "SYNACK", len(synack.get_bits())])
-                jit = random.uniform(0, 1)
-                if jit >= jitter:
+                    print(connection.data_port.getsockname()[1])
+                    synack = TCP_header(connection.data_port.getsockname()[1], 0, message_syn.sequence_num+1,0,0,0,"", self.server_port)
+                    synack.custom_message(1,1,0)
 
-                    self.send_packet(synack.get_bits(), address[0], address[1], self.welcome_socket, jit)
+                    connection.got_syn = 1
+                    log.append([address[0], address[1], "SYNACK", len(synack.get_bits())])
+                    jit = random.uniform(0, 1)
+                    if jit >= jitter:
+
+                        self.send_packet(synack.get_bits(), address[0], address[1], self.welcome_socket, jit)
+                    else:
+                        self.send_packet(synack.get_bits(), address[0], address[1], self.welcome_socket, 0)
+
+                packet2, address2 = self.welcome_socket.recvfrom(1024)
+                x = random.randrange(0, 100)
+                if x <= packet_loss:
+                    continue
+                message2 = self.bits_to_header(packet2)
+
+                cur_seq = message2.ACK_num
+                cur_ack = message2.sequence_num
+
+                if message2.get_type() == "FIN":
+                    print("interruption")
+                    self.welcoming_closeconnection(0, cur_seq, cur_ack,address[0], address[1], self.welcome_socket.getsockname()[1])
+                    return 0
+
+                if message2.get_type() == "ACK" and connection.got_syn == 1:
+                    print("check ack")
+                    connection.got_ack = 1
+                    connection.connected = 1
+
+                    self.connections.append(connection)
+                    self.curconnection = connection
+                    return 1
                 else:
-                    self.send_packet(synack.get_bits(), address[0], address[1], self.welcome_socket, 0)
-            
-            packet2, address2 = self.welcome_socket.recvfrom(1024)
-            x = random.randrange(0, 100)
-            if x <= packet_loss:
-                return 0
-            message2 = self.bits_to_header(packet2)
-
-            cur_seq = message2.ACK_num
-            cur_ack = message2.sequence_num
-
-            if message2.get_type() == "FIN":
-                print("interruption")
-                self.welcoming_closeconnection(0, cur_seq, cur_ack,address[0], address[1], self.welcome_socket.getsockname()[1])
-                return 0
-
-            if message2.get_type() == "ACK" and connection.got_syn == 1:
-                print("check ack")
-                connection.got_ack = 1
-                connection.connected = 1
-
-                self.connections.append(connection)
-                self.curconnection = connection
-                return 1
-            else:
-                print("Couldn't establish handshake...")
-                return 0
+                    print("Couldn't establish handshake...")
+                    return 0
 
         except KeyboardInterrupt:
             print("Keyboard Interruption")
@@ -172,7 +173,7 @@ class Server():
                 packet, address = self.curconnection.data_port.recvfrom(1024)# check this size
                 x = random.randrange(0, 100)
                 if x <= packet_loss:
-                    return 0
+                    continue
                 message = self.bits_to_header(packet)
                 cur_seq = message.ACK_num
                 cur_ack = message.sequence_num
@@ -190,6 +191,8 @@ class Server():
 
                 print("break")
 
+                #time.sleep(3)
+
                 response = TCP_header(address[1], message.ACK_num, message.sequence_num+bits, 0, 1, 0, "", self.curconnection.data_port.getsockname()[1])
                 packet = response.get_bits()
 
@@ -197,6 +200,7 @@ class Server():
 
                 log.append([address[0], address[1], "DATA", len(packet)])
                 jit = random.uniform(0, 1)
+                # send ACK and add jitter
                 if jit >= jitter:
 
                     self.send_packet(packet, address[0], address[1], self.curconnection.data_port, jit)
