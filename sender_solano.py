@@ -59,7 +59,8 @@ class TCP_header():
         bits += '{0:01b}'.format(self.ACK)
         bits += '{0:01b}'.format(self.FIN)
         if self.data != "":
-            bits += self.data
+            for x in self.data:
+                bits += format(ord(x), '08b')
         return bits.encode()
 
 
@@ -140,17 +141,28 @@ class Client():
             print("Keyboard Interruption")
             self.closeconnection(0, curr_seq, curr_ack, address, port)
 
-    def udpconnect(self, prev_message, address, port):
+    def udpconnect(self, prev_message, address, port, file):
 
         global log
 
         cur_seq = prev_message[0]
         cur_ack = prev_message[1]
 
+        file_text = open(file, "r")
+        not_eof = True
+
         try:
             while self.connection:
                 print("in udp connect")
-                message = TCP_header(port, cur_seq, cur_ack, 0, 0, 0, "Ping")
+
+                file_read = file_text.read(112)
+                if not file_read:
+                    print("End Of File")
+                    not_eof = False
+                    break
+
+                message = TCP_header(port,cur_seq,cur_ack,0,0,0, file_read)
+                print("line: ", message.data)
 
                 print("sending", "seq: ", message.sequence_num, "ack: ", message.ACK_num)
                 temp = message.get_bits()
@@ -181,13 +193,24 @@ class Client():
                         # self.client_sock.settimeout(self.timeout)
                         message = bits_to_header(data)
 
+                        if message.FIN == 1:
+                            file_text.close()
+                            self.closeconnection(1, cur_seq, cur_ack, address, port)
+                            break
+
+                        if message.ACK == 1:
+                            print("received: ack: ", message.ACK_num, " seq: ",message.sequence_num )
+                            cur_seq = message.ACK_num
+                            cur_ack = 1 + message.sequence_num
+                            continue
+                        else:
+                            print("wrong data from server")
+                            file_text.close()
+                            self.closeconnection(2, cur_seq, cur_ack,  address, port)
+
                         print(data)
 
                         print("client: ", message.data, "seq: ", message.sequence_num, "ack: ", message.ACK_num)
-
-                        if message.FIN == 1:
-                            self.closeconnection(1, cur_seq, cur_ack, address, port)
-                            break
 
                         # if message.data == "Pong":
                         #     cur_seq = message.ACK_num
@@ -202,9 +225,15 @@ class Client():
                         # self.timeout +=1
                         print("RESEND")
                         continue
+                
+                if message.FIN == 1:
+                    break
+            
+            file_text.close()
 
         except KeyboardInterrupt:
             print("Keyboard Interruption")
+            file_text.close()
             self.closeconnection(0, cur_seq, cur_ack, address, port)
 
     def closeconnection(self, putah, cur_seq, cur_ack, address, port):
