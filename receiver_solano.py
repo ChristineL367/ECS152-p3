@@ -1,10 +1,11 @@
 from pickle import FALSE, TRUE
 import sys
 import threading
+from threading import Thread
 import socket
 import binascii
 import time
-
+import random
 log = []
 class connection():
     def __init__(self):
@@ -15,6 +16,7 @@ class connection():
         self.got_ack = 0
         self.message = None
         self.data_port = None
+        self.closed = 0
 class TCP_header():
     def __init__(self, dst_port, seq_num, ack_num, syn, ack, fin, data, src_port):
         self.source_prt = src_port  # 16 bits
@@ -74,7 +76,7 @@ class Server():
 
         #self.lock = threading.Lock()
 
-    def send_packet(self,message, DNS_IP, DNS_PORT, socket_obj):
+    def send_packet(self,message, DNS_IP, DNS_PORT, socket_obj, jitter):
         READ_BUFFER = 1024  # size of the buffer to read in the received UDP packet.
 
         address = (DNS_IP, DNS_PORT)
@@ -83,17 +85,21 @@ class Server():
         # send message to given address
 
         print(message)
+        time.sleep(jitter)
 
         our_socket.sendto(message, address)
         #logger(53, DNS_PORT, type, length)
         # receive message
 
         #our_socket.close()
-    def handshake(self, connection): #basically accept
+    def handshake(self, connection, packet_loss, jitter): #basically accept
         #self.welcome_socket.listen() #put this in main
 
         try:
             packet, address = self.welcome_socket.recvfrom(1024) #check this size
+            x = random.randrange(0,100)
+            if x <= packet_loss:
+                return 0
             print("handshake get SYN: ", packet)
             message_syn = self.bits_to_header(packet)
 
@@ -118,9 +124,17 @@ class Server():
 
                 connection.got_syn = 1
                 log.append([address[0], address[1], "SYNACK", len(synack.get_bits())])
-                self.send_packet(synack.get_bits(), address[0], address[1], self.welcome_socket)
+                jit = random.uniform(0, 1)
+                if jit >= jitter:
+
+                    self.send_packet(synack.get_bits(), address[0], address[1], self.welcome_socket, jit)
+                else:
+                    self.send_packet(synack.get_bits(), address[0], address[1], self.welcome_socket, 0)
             
             packet2, address2 = self.welcome_socket.recvfrom(1024)
+            x = random.randrange(0, 100)
+            if x <= packet_loss:
+                return 0
             message2 = self.bits_to_header(packet2)
 
             cur_seq = message2.ACK_num
@@ -148,7 +162,7 @@ class Server():
             self.welcoming_closeconnection(1, cur_seq, cur_ack,address[0], address[1], self.welcome_socket.getsockname()[1])
             return 0
 
-    def data(self):
+    def data(self, packet_loss, jitter):
 
             #separate from welcome thread
         try:
@@ -156,6 +170,9 @@ class Server():
                 # try:
                         #self.data_socket.listen()
                 packet, address = self.curconnection.data_port.recvfrom(1024)# check this size
+                x = random.randrange(0, 100)
+                if x <= packet_loss:
+                    return 0
                 message = self.bits_to_header(packet)
                 cur_seq = message.ACK_num
                 cur_ack = message.sequence_num
@@ -182,7 +199,12 @@ class Server():
                 packet = response.get_bits()
 
                 log.append([address[0], address[1], "DATA", len(packet)])
-                self.send_packet(packet, address[0], address[1], self.curconnection.data_port)
+                jit = random.uniform(0, 1)
+                if jit >= jitter:
+
+                    self.send_packet(packet, address[0], address[1], self.curconnection.data_port, jit)
+                else:
+                    self.send_packet(packet, address[0], address[1], self.curconnection.data_port, 0)
                     
 
         except KeyboardInterrupt:
@@ -243,7 +265,7 @@ class Server():
 
         print("closing connection for port ")
         self.welcome_socket.close()
-
+        self.welcome_socket.closed = 1
     def data_closeconnection(self, putah, cur_seq, cur_ack, address, dst_port, src_port):
 
         # putah = 0 -> client initiated close
@@ -276,18 +298,55 @@ class Server():
 
         print("closing connection for port ")
         self.curconnection.data_port.close()
+        self.curconnection.closed = 1
+class handshakeThread(Thread):
+    def __init__(self, client_ip, port, server_init, jitter, packet_loss):
+        Thread.__init__(self)
+        self.client_ip = client_ip
+        self.port = port
+        self.server_init = server_init
+        self.handshaken = 0
+        self.threads = []
+        self.jitter = jitter
+        self.packet_loss = packet_loss
+    def run(self):
 
+        while True:
+            new_connection = connection()
+
+            self.server_init.handshake(new_connection, self.jitter, self.packet_loss)
+
+            if new_connection.connected == 1:
+                print("connected to new client")
+                self.handshaken= 1
+                new_data = dataThread(self.server_init, self.jitter, self.packet_loss)
+                new_data.start()
+                self.threads.append(new_data)
+                if self.server_init.curconnection.closed == 1:
+                    new_data.join()
+
+class dataThread(Thread):
+    def __init__(self, server_init, jitter, packet_loss):
+        Thread.__init__(self)
+        self.server_init = server_init
+        self.jitter = jitter
+        self.packet_loss = packet_loss
+    def run(self):
+
+        self.server_init.data(self.jitter, self.packet_loss)
 if __name__ == '__main__':
     client_ip = sys.argv[2]
     port = sys.argv[4]
+    packet_loss = int(sys.argv[6])
+    jitter = float(sys.argv[8])
     server_init = Server(sys.argv[4])
-    new_connection = connection()#will enventually be multithreaded
-    handshaken = server_init.handshake(new_connection)
-    if handshaken == 1:
-        print("connection established") 
-    if new_connection.connected == 1:
-        print("connected to new client")
-        server_init.data()
+    #new_connection = connection()#will enventually be multithreaded
+    new_thread = handshakeThread(client_ip, port, server_init, packet_loss, jitter)  # will enventually be multithreaded
+    # server_init.thread_data()
+    new_thread.start()
+
+    new_thread.join()
+
 
     for i in range(0,len(log)):
        print(log[i][0] , " | " , log[i][1] , " | " , log[i][2] , " | " , log[i][3])
