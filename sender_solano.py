@@ -200,7 +200,7 @@ class Client():
                         # self.client_sock.settimeout(self.timeout)
                         message = bits_to_header(data)
 
-                        if message.gettype() != "ACK":
+                        if message.get_type() != "ACK":
                             continue
 
                         if message.FIN == 1:
@@ -231,6 +231,7 @@ class Client():
                         break
                     except socket.timeout:
                         # self.timeout +=1
+                        self.packet_losses +=1
                         print("RESEND")
                         continue
                 
