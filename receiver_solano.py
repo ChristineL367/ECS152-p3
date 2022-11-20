@@ -29,9 +29,9 @@ class TCP_header():
         self.sequence_num = seq_num  # 32 bits
         self.ACK_num = ack_num  # 32 bits
         # self.header_length = 0 # 4 bits
-        # self.unused = 0 # 4 bits
-        # self.CWR = 0 # 1 bit
-        # self.ECE = 0 # 1 bit
+        self.unused = 0 # 4 bits
+        self.CWR = 0 # 1 bit
+        self.ECE = 0 # 1 bit
         # self.URG = 0 # 1 bit
         self.ACK = ack  # ack flag 0 if not ack, 1 if syn-ack or ack
         # self.PSH = 0 # 1 bit
@@ -49,11 +49,15 @@ class TCP_header():
         bits += '{0:016b}'.format(self.destination_prt)
         bits += '{0:032b}'.format(self.sequence_num)
         bits += '{0:032b}'.format(self.ACK_num)
+        bits += '{0:04b}'.format(self.unused)
+        bits += '{0:01b}'.format(self.CWR)
+        bits += '{0:01b}'.format(self.ECE)
         bits += '{0:01b}'.format(self.SYN)
         bits += '{0:01b}'.format(self.ACK)
         bits += '{0:01b}'.format(self.FIN)
         if self.data != "":
-            bits += self.data
+            for x in self.data:
+                bits += format(ord(x), '08b')
         return bits.encode()
 
     def custom_message(self, ack, syn, fin):
@@ -108,7 +112,7 @@ class Server():
 
         try:
             while (1):
-                packet, address = self.welcome_socket.recvfrom(1024)  # check this size
+                packet, address = self.welcome_socket.recvfrom(1024)
                 x = random.randrange(0, 100)
                 if x <= packet_loss:
                     continue
@@ -185,7 +189,7 @@ class Server():
             while (1):
                 # try:
                 # self.data_socket.listen()
-                packet, address = self.curconnection.data_port.recvfrom(1024)  # check this size
+                packet, address = self.curconnection.data_port.recvfrom(8000)  # check this size
                 x = random.randrange(0, 100)
                 if x <= packet_loss:
                     continue
@@ -198,16 +202,20 @@ class Server():
                                                   1])  # figure out how to end the connection here
                     break
                 print(packet)
-                if message.data == "Ping":
-                    print("correct ping")
-                else:
-                    print("wrong data")
-                    print(message.data)
+                print(message.data)
+                # if message.data == "Ping":
+                #     print("correct ping")
+                # else:
+                #     print("wrong data")
+                #     print(message.data)
 
-                bits = len(message.data)
+                bits = len(packet.decode())
+
+                print("num of bits: ", bits)
 
                 print("received: ack:", message.ACK_num, " sequence: ", message.sequence_num)
                 print(packet)
+                print(message.data)
 
                 print("break")
 
@@ -246,18 +254,27 @@ class Server():
         dst_port = int(bits[16:32], 2)
         seq_num = int(bits[32:64], 2)
         ack_num = int(bits[64:96], 2)
+        unused = int(bits[96:100],2)
+        cwr = int(bits[100],2)
+        ece = int(bits[101],2)
         print("in bits_to_header", ack_num)
-        syn = int(bits[96], 2)
+        syn = int(bits[102], 2)
         print(syn)
-        ack = int(bits[97], 2)
-        fin = int(bits[98], 2)
+        ack = int(bits[103], 2)
+        fin = int(bits[104], 2)
         print("in bits to header 1")
         try:
-            data_string = bits[99:]
-            print("in bits to header", data_string)
+            data_string = bits[105:]
+            data = ""
+            length = len(data_string)/8 
+
+            for x in range(int(length)):
+                start = x*8
+                end = (x+1)*8
+                data += chr(int(str(data_string[start:end]),2))
         except:
-            data_string = ""
-        return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data_string, src_port)
+            data = ""
+        return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data, src_port)
 
     def welcoming_closeconnection(self, putah, cur_seq, cur_ack, address, dst_port, src_port):
         if putah == 1:
@@ -274,6 +291,7 @@ class Server():
 
                 if message.ACK == 1:
                     break
+
         elif putah == 0:
             message = TCP_header(dst_port, cur_seq, cur_ack + 1, 0, 0, 0, "", src_port)
             message.ACK = 1

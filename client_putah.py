@@ -104,7 +104,7 @@ class Client():
 
                 log.append([address, port, "ACK", len(message.get_bits())])
                 self.client_sock.sendto(message.get_bits(), (address, port))
-                return [message_ack.ACK_num, message_synack.sequence_num+1]
+                return [message_synack.ACK_num, message_synack.sequence_num+1]
             
             return ""
 
