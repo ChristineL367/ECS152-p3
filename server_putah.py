@@ -325,8 +325,7 @@ if __name__ == '__main__':
     new_thread.start()
 
     new_thread.join()
-    for i in new_thread.threads:
-        i.join()
+
         # if new_thread.handshaken == 1:
         #     new_thread = dataThread(server_init)  # will enventually be multithreaded
         #     # server_init.thread_data()
