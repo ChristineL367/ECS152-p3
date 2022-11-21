@@ -4,8 +4,12 @@ import threading
 from threading import Thread
 import socket
 import binascii
+import selectors
 import time
+import types
 log = []
+sel = selectors.DefaultSelector()
+
 class connection():
     def __init__(self):
         self.connected = 0
@@ -66,118 +70,89 @@ class TCP_header():
             return "FIN"
         elif self.data != "":
             return "DATA"
-class Server():
-    def __init__(self, server_port):
-        self.server_port = int(server_port)
-        self.connections = [] #queue
-        self.welcome_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.welcome_socket.bind(('127.0.0.1', self.server_port))
-        self.curconnection = None
-        self.welcome_close = 0
+def send_packet(message, DNS_IP, DNS_PORT, socket_obj):
+    address = (DNS_IP, DNS_PORT)
 
-        #self.lock = threading.Lock()
+    our_socket = socket_obj  # Internet, UDP.
+    # send message to given address
 
-    def send_packet(self,message, DNS_IP, DNS_PORT, socket_obj):
-        READ_BUFFER = 1024  # size of the buffer to read in the received UDP packet.
+    print(message)
 
-        address = (DNS_IP, DNS_PORT)
-
-        our_socket = socket_obj  # Internet, UDP.
-        # send message to given address
-
-        print(message)
-
-        our_socket.sendto(message, address)
-        #logger(53, DNS_PORT, type, length)
-        # receive message
-
-        #our_socket.close()
-    def handshake(self, connection): #basically accept
-        try:
-            packet, address = self.welcome_socket.recvfrom(1024)  # check this size
-            print("handshake get SYN: ", packet)
-            message = self.bits_to_header(packet)
-
-            cur_seq = 0
-            cur_ack = message.sequence_num
-
-            print("received seq: ", message.sequence_num, " ack: ", message.ACK_num)
-
-
-            print(message.SYN)
-
-            if message.get_type() == "FIN":
-                self.welcoming_closeconnection(0, cur_seq, cur_ack, address[0], address[1],
-                                           self.welcome_socket.getsockname()[1])
-                return 0
-
-            if message.get_type() == "SYN":
-                print("got syn")
-                print(address)
-                connection.data_port = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                connection.data_port.bind(("127.0.0.1", 0))
-
-                print(connection.data_port.getsockname()[1])
-                print("sending seq: ", cur_seq, " ack: ", cur_ack+1)
-                synack = TCP_header(connection.data_port.getsockname()[1], 0, cur_ack+1, 0, 0, 0, "", self.server_port)
-                synack.custom_message(1, 1, 0)
-
-                connection.got_syn = 1
-                log.append([address[0], address[1], "SYNACK", len(synack.get_bits())])
-                self.send_packet(synack.get_bits(), address[0], address[1], self.welcome_socket)
-
-            packet2, address2 = self.welcome_socket.recvfrom(1024)
-            message2 = self.bits_to_header(packet2)
-
-            print("received seq: ", message2.sequence_num, " ack: ", message2.ACK_num)
-            
-
-            cur_seq = message2.ACK_num
-            cur_ack = message.sequence_num
-
-            if message2.get_type() == "FIN":
-                print("interruption")
-                self.welcoming_closeconnection(0, cur_seq, cur_ack, address[0], address[1],
-                                           self.welcome_socket.getsockname()[1])
-                return 0
-
-            if message2.get_type() == "ACK" and connection.got_syn == 1:
-                print("check ack")
-                connection.got_ack = 1
-                connection.connected = 1
-
-                self.connections.append(connection)
-                self.curconnection = connection
-                return 1
-            else:
-                print("Couldn't establish handshake...")
-                return 0
-
-        except KeyboardInterrupt:
-            print("Keyboard Interruption")
-            self.welcoming_closeconnection(1, cur_seq, cur_ack, address[0], address[1],
-                                           self.welcome_socket.getsockname()[1])
+    our_socket.sendto(message, address)
+def accept(welcome_socket, port): #basically accept
+    try:
+        packet, address = welcome_socket.recvfrom(1024)  # check this size
+        connect = connection()
+        print("handshake get SYN: ", packet)
+        message = bits_to_header(packet)
+        gotsyn = 0
+        cur_seq = 0
+        cur_ack = message.sequence_num
+        print("received seq: ", message.sequence_num, " ack: ", message.ACK_num)
+        if message.get_type() == "FIN":
+            welcoming_closeconnection(welcome_socket,0, cur_seq, cur_ack,address[0], address[1], welcome_socket.getsockname()[1])
             return 0
 
-    def data(self):
+        if message.get_type() == "SYN":
+            print("got syn")
+            print(address)
+            connect.data_port = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-        try:
-            while (1):
-                # try:
-                # self.data_socket.listen()
-                packet, address = self.curconnection.data_port.recvfrom(1024)  # check this size
-                message = self.bits_to_header(packet)
+            connect.data_port.bind(("127.0.0.1", 0))
 
+            print(connect.data_port.getsockname()[1])
+            synack = TCP_header(connect.data_port.getsockname()[1], 0, cur_ack+1, 0, 0, 0, "", port)
+            synack.custom_message(1, 1, 0)
+
+            got_syn = 1
+            log.append([address[0], address[1], "SYNACK", len(synack.get_bits())])
+            send_packet(synack.get_bits(), address[0], address[1], welcome_socket)
+
+        packet2, address2 = welcome_socket.recvfrom(1024)
+        message2 = bits_to_header(packet2)
+        print("received seq: ", message2.sequence_num, " ack: ", message2.ACK_num)
+        if message2.get_type() == "FIN":
+            print("interruption")
+            welcoming_closeconnection(welcome_socket,0, cur_seq, cur_ack, address[0], address[1], welcome_socket.getsockname()[1])
+            return 0
+
+        if message2.get_type() == "ACK" and got_syn == 1:
+            print("check ack")
+            connect.data_port.setblocking(False)
+            curconnection = connect
+
+            return curconnection.data_port, address
+        else:
+            print("Couldn't establish handshake...")
+            return 0
+
+    except KeyboardInterrupt:
+        print("Keyboard Interruption")
+        welcoming_closeconnection(welcome_socket,1, cur_seq, cur_ack, address[0], address[1], welcome_socket.getsockname()[1]) ##############
+        return 0
+def service_connection(key, mask):
+    # Get the socket from the key
+    try:
+        sock = key.fileobj
+        data = key.data
+        address = 0
+        if mask & selectors.EVENT_READ:
+            # print the event
+            print(f"Read event for {data.addr}")
+            # If we can read, it means the socket is ready to receive data
+
+            packet, address = sock.recvfrom(1024)  # check this size
+
+            if packet and address:
+                # If we have received data, store it in the data object
+                message = bits_to_header(packet)
                 print("received seq: ", message.sequence_num, " ack: ", message.ACK_num)
                 cur_seq = message.ACK_num
-                cur_ack = message.sequence_num + len(message.data)*8
-
+                cur_ack = message.sequence_num + len(message.data) * 8
                 print("sending seq: ", cur_seq, " ack: ", cur_ack)
                 if message.get_type() == "FIN":
-                    self.data_closeconnection(0, cur_seq, cur_ack+1, address[0], address[1],
-                                              self.curconnection.data_port.getsockname()[
-                                                  1])  # figure out how to end the connection here
-                    break
+                    data_closeconnection(sock, 0, cur_seq, cur_ack+1, address[0], address[1], sock.getsockname()[
+                        1])
                 print(packet)
                 if message.data == "Ping":
                     print("correct ping")
@@ -185,161 +160,149 @@ class Server():
                     print("wrong data")
                     print(message.data)
 
-                response = TCP_header(address[1], cur_seq, cur_ack, 0, 0, 0, "Pong", self.curconnection.data_port.getsockname()[1])
+                response = TCP_header(address[1], cur_seq, cur_ack, 0, 0, 0, "Pong", sock.getsockname()[1])
                 packet = response.get_bits()
 
                 log.append([address[0], address[1], "DATA", len(packet)])
-                self.send_packet(packet, address[0], address[1], self.curconnection.data_port)
+
+                data.outb += packet
+            else:
+                # If we have received no data, it means the connection is closed
+                print(f"Closing connection to {data.addr}")
+                sel.unregister(sock)
+                sock.close()
+        if mask & selectors.EVENT_WRITE:
+            # If we can write, it means the socket is ready to send data
+            if data.outb:
+                # If we have data to send, send it
+                #print(f"Echoing {data.outb!r} to {data.addr}")
+                sent = sock.sendto(data.outb, (address[0], address[1]))
+                data.outb = data.outb[sent:]
+    except KeyboardInterrupt:
+        print("Keyboard Interruption")
+        data_closeconnection(sock, 1,cur_seq, cur_ack, address[0], address[1],sock.getsockname()[1])  ##############
+        return 0
+def bits_to_header(bits):
+    bits = bits.decode()
+    src_port = int(bits[:16], 2)
+    dst_port = int(bits[16:32], 2)
+    seq_num = int(bits[32:64], 2)
+    ack_num = int(bits[64:96], 2)
+    syn = int(bits[96], 2)
+    print(syn)
+    ack = int(bits[97], 2)
+    fin = int(bits[98], 2)
+    print("in bits to header 1")
+    try:
+        data_string = bits[99:]
+        print("in bits to header", data_string)
+    except:
+        data_string = ""
+    return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data_string, src_port)
 
 
-        except KeyboardInterrupt:
-            print("Server Keyboard Interruption")
-            self.data_closeconnection(1, cur_seq, cur_ack, address[0], address[1],
-                                      self.curconnection.data_port.getsockname()[1])
+def welcoming_closeconnection(welcome_socket, putah, cur_seq, cur_ack, address, dst_port, src_port):
+    if putah == 1:
+        ack = False
+        while ack != True:
+            message = TCP_header(dst_port,cur_seq,cur_ack,0,0,0, "", src_port)
+            message.FIN = 1
 
-    # def thread_handshake(self, connection):
-    #     connection.th = threading.Thread(target=self.handshake(connection))#create new thread for a new client connection
-    #     connection.th.daemon = True
-    #     connection.th.start()
-    #     connection.th.join()
-    # def thread_data(self, connection):
-    #     connection.td = threading.Thread(target=self.data()) #create new thread for a new client connection
-    #     connection.td.daemon = True
-    #     connection.td.start()
-    #     #connection.td.join()
-    def logger(source, dest, type, length):
-        log.append([source, dest, type, length])
+            log.append([address, dst_port, "FIN", len(message.get_bits())])
+            welcome_socket.sendto(message.get_bits(), (address, dst_port))
+
+            data, addr = welcome_socket.recvfrom(1024)
+            message = bits_to_header(data)
+
+            if message.ACK == 1:
+                break
+    elif putah == 0:
+        message = TCP_header(dst_port,cur_seq,cur_ack+1,0,0,0, "", src_port)
+        message.ACK = 1
+
+        log.append([address, dst_port, "ACK", len(message.get_bits())])
+        welcome_socket.sendto(message.get_bits(), (address, dst_port))
+
+    print("closing connection for port ")
+    welcome_socket.close()
+    welcome_close = 1
+
+def data_closeconnection(curconnection,putah, cur_seq, cur_ack, address, dst_port, src_port):
+
+    # putah = 0 -> client initiated close
+    # putah = 1 -> server initiated close
+    # putah = 2 -> wrong data
+    if putah == 1:
+        ack = False
+        count = 0
+        while ack != True or count != 3:
+            message = TCP_header(dst_port,cur_seq,cur_ack,0,0,0, "", src_port)
+            message.FIN = 1
+
+            print("in data fin")
+            log.append([address, dst_port, "FIN", len(message.get_bits())])
+            curconnection.data_port.sendto(message.get_bits(), (address, dst_port))
+
+            data, addr = curconnection.data_port.recvfrom(1024)
+            message = bits_to_header(data)
+            print("ack in fin", message.ACK)
+
+            if message.ACK == 1:
+                break
+            count += 1
+    elif putah == 0:
+        message = TCP_header(dst_port,cur_seq,cur_ack,0,0,0, "", src_port)
+        message.ACK = 1
+
+        log.append([address, dst_port, "ACK", len(message.get_bits())])
+        curconnection.sendto(message.get_bits(), (address, dst_port))
+
+    print("closing connection for port ")
+    curconnection.close()
+    return 1
+
+def accept_wrapper(sock, port):
+    # Accept a connection and register the socket with the selector
+    conn, addr = accept(sock, port)
+    print(f"Accepted connection from {addr}")
+    # Set the socket to non-blocking
+    conn.setblocking(False)
+    # Create a data object to store the connection id and the messages
+    data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")
+    # Register the socket with the selector
+    events = selectors.EVENT_READ | selectors.EVENT_WRITE
+    sel.register(conn, events, data=data)
 
 
-    def bits_to_header(self, bits):
-        bits = bits.decode()
-        src_port = int(bits[:16], 2)
-        dst_port = int(bits[16:32], 2)
-        seq_num = int(bits[32:64], 2)
-        ack_num = int(bits[64:96], 2)
-        syn = int(bits[96], 2)
-        print(syn)
-        ack = int(bits[97], 2)
-        fin = int(bits[98], 2)
-        print("in bits to header 1")
-        try:
-            data_string = bits[99:]
-            print("in bits to header", data_string)
-        except:
-            data_string = ""
-        return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data_string, src_port)
-    def welcoming_closeconnection(self, putah, cur_seq, cur_ack, address, dst_port, src_port):
-        if putah == 1:
-            ack = False
-            while ack != True:
-                message = TCP_header(dst_port,cur_seq, cur_ack,0,0,0, "", src_port)
-                message.FIN = 1
 
-                log.append([address, dst_port, "FIN", len(message.get_bits())])
-                self.welcome_socket.sendto(message.get_bits(), (address, dst_port))
 
-                data, addr = self.welcome_socket.recvfrom(1024)
-                message = self.bits_to_header(data)
-
-                if message.ACK == 1:
-                    break
-        elif putah == 0:
-            message = TCP_header(dst_port,cur_seq, cur_ack+1,0,0,0, "", src_port)
-            message.ACK = 1
-
-            log.append([address, dst_port, "ACK", len(message.get_bits())])
-            self.welcome_socket.sendto(message.get_bits(), (address, dst_port))
-
-        print("closing connection for port ")
-        self.welcome_socket.close()
-        self.welcome_close = 1
-
-    def data_closeconnection(self, putah, cur_seq, cur_ack, address, dst_port, src_port):
-
-        # putah = 0 -> client initiated close
-        # putah = 1 -> server initiated close
-        # putah = 2 -> wrong data
-        if putah == 1:
-            ack = False
-            count = 0
-            while ack != True or count != 3:
-                message = TCP_header(dst_port,cur_seq, cur_ack ,0,0,0, "", src_port)
-                message.FIN = 1
-
-                print("in data fin")
-                log.append([address, dst_port, "FIN", len(message.get_bits())])
-                self.curconnection.data_port.sendto(message.get_bits(), (address, dst_port))
-
-                data, addr = self.curconnection.data_port.recvfrom(1024)
-                message = self.bits_to_header(data)
-                print("ack in fin", message.ACK)
-
-                if message.ACK == 1:
-                    break
-                count += 1
-        elif putah == 0:
-            message = TCP_header(dst_port,cur_seq, cur_ack,0,0,0, "", src_port)
-            message.ACK = 1
-
-            log.append([address, dst_port, "ACK", len(message.get_bits())])
-            self.curconnection.data_port.sendto(message.get_bits(), (address, dst_port))
-
-        print("closing connection for port ")
-        self.curconnection.data_port.close()
-        self.curconnection.closed = 1
-class handshakeThread(Thread):
-    def __init__(self, client_ip, port, server_init):
-        Thread.__init__(self)
-        self.client_ip = client_ip
-        self.port = port
-        self.server_init = server_init
-        self.handshaken = 0
-        self.threads = []
-    def run(self):
-
-        while True:
-            new_connection = connection()
-
-            self.server_init.handshake(new_connection)
-
-            if new_connection.connected == 1:
-                print("connected to new client")
-                self.handshaken= 1
-                new_data = dataThread(self.server_init)
-                new_data.start()
-                self.threads.append(new_data)
-                if self.server_init.curconnection.closed == 1:
-                    new_data.join()
-
-class dataThread(Thread):
-    def __init__(self, server_init):
-        Thread.__init__(self)
-        self.server_init = server_init
-
-    def run(self):
-
-        self.server_init.data()
 
 if __name__ == '__main__':
     threads = []
     client_ip = sys.argv[2]
-    port = sys.argv[4]
-    server_init = Server(sys.argv[4])
-    #while (True):
+    port = int(sys.argv[4])
+    lsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
+    lsock.bind((client_ip, port))
 
-    new_thread = handshakeThread(client_ip, port, server_init) #will enventually be multithreaded
-    #server_init.thread_data()
-    new_thread.start()
+    sel.register(lsock, selectors.EVENT_READ, data=None)
 
-    new_thread.join()
-    for i in new_thread.threads:
-        i.join()
-        # if new_thread.handshaken == 1:
-        #     new_thread = dataThread(server_init)  # will enventually be multithreaded
-        #     # server_init.thread_data()
-        #     new_thread.start()
-        #     new_thread.join()
+    try:
+        while True:
+
+            events = sel.select(timeout=None)
+            for key, mask in events:
+
+                if key.data is None:
+
+                    accept_wrapper(key.fileobj, port)
+                else:
+
+                    service_connection(key, mask)
+    except KeyboardInterrupt:
+        print("keyboard interrupt")
+    finally:
+        sel.close()
 
 
 

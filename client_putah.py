@@ -98,27 +98,26 @@ class Client():
 
             print("received: seq: ", cur_seq, " ack: ", cur_ack)
 
-
             data_port = message_synack.destination_prt
             self.data_port = data_port
 
             if message_synack.FIN == 1:
-                self.closeconnection(1, cur_seq, cur_ack+1, address, port)
+                self.closeconnection(1, cur_seq, cur_ack + 1, address, port)
 
             if (message_synack.SYN == 1 and message_synack.ACK == 1):
                 # send third handshake
                 print("check synack")
                 self.connection = True
-                print("sending seq: ", cur_seq, " ack: ", cur_ack+1)
-                message_ack = TCP_header(port, cur_seq, cur_ack+1, 0, 0, 0, "")
+                print("sending seq: ", cur_seq, " ack: ", cur_ack + 1)
+                message_ack = TCP_header(port, cur_seq, cur_ack + 1, 0, 0, 0, "")
                 message_ack.custom_message(1, 0, 0)
 
                 log.append([self.client_sock.getsockname()[1], port, "ACK", len(message_ack.get_bits())])
                 self.client_sock.sendto(message_ack.get_bits(), (address, port))
-                
-                return [message_ack.ACK_num, message_synack.sequence_num+1]
 
-            return ""    
+                return [message_ack.ACK_num, message_synack.sequence_num + 1]
+
+            return ""
 
         except KeyboardInterrupt:
             print("Keyboard Interruption")
@@ -135,7 +134,7 @@ class Client():
             while self.connection:
                 print("in udp connect")
                 print("sending seq: ", cur_seq, " ack: ", cur_ack)
-                message = TCP_header(port, cur_seq,cur_ack,0,0,0, "Ping")
+                message = TCP_header(port, cur_seq, cur_ack, 0, 0, 0, "Ping")
 
                 log.append([self.client_sock.getsockname()[1], port, "DATA", len(message.get_bits())])
                 self.client_sock.sendto(message.get_bits(), (address, port))
@@ -145,12 +144,12 @@ class Client():
 
                 message = bits_to_header(data)
                 cur_seq = message.ACK_num
-                cur_ack = len(message.data)*8 + message.sequence_num
+                cur_ack = len(message.data) * 8 + message.sequence_num
 
                 print("client: ", message.data)
 
                 if message.FIN == 1:
-                    self.closeconnection(1, cur_seq, cur_ack+1, address, port)
+                    self.closeconnection(1, cur_seq, cur_ack + 1, address, port)
                     break
 
                 if message.data == "Pong":
