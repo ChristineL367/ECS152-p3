@@ -5,6 +5,7 @@ import threading
 import time
 
 log = []
+data_sent = 0
 
 
 class TCP_header():
@@ -17,7 +18,7 @@ class TCP_header():
         # self.header_length = 0 # 4 bits
         self.unused = 0  # 4 bits
         self.CWR = 0  # 1 bit
-        self.ECE = 0  # 1 bit
+        #self.ECE = 0  # 1 bit
         # self.URG = 0 # 1 bit
         self.ACK = ack  # ack flag 0 if not ack, 1 if syn-ack or ack
         # self.PSH = 0 # 1 bit
@@ -37,7 +38,7 @@ class TCP_header():
         bits += '{0:032b}'.format(self.ACK_num)
         bits += '{0:04b}'.format(self.unused)
         bits += '{0:01b}'.format(self.CWR)
-        bits += '{0:01b}'.format(self.ECE)
+        #bits += '{0:01b}'.format(self.ECE)
         bits += '{0:01b}'.format(self.SYN)
         bits += '{0:01b}'.format(self.ACK)
         bits += '{0:01b}'.format(self.FIN)
@@ -80,6 +81,7 @@ class Client():
         self.rrts_dev = []
         self.packet_losses = 0
         self.packets_sent = 0
+        self.data_sent = 0
         # self.client_sock.settimeout(self.timeout)
 
     def handshake(self, address, port):
@@ -98,7 +100,9 @@ class Client():
             log.append([address, port, "SYN", len(message_syn.get_bits())])
             while (1):
                 self.packets_sent += 1
+                self.data_sent +=104
                 start = time.perf_counter()
+
                 self.client_sock.sendto(message_syn.get_bits(), (address, port))
 
                 try:
@@ -144,6 +148,7 @@ class Client():
 
                 log.append([address, port, "ACK", len(message_ack.get_bits())])
 
+                self.data_sent +=104
                 self.client_sock.sendto(message_ack.get_bits(), (address, port))
 
                 return [message_ack.ACK_num, message_synack.sequence_num + 1]
@@ -167,7 +172,7 @@ class Client():
             while self.connection:
                 print("in udp connect")
 
-                file_read = file_text.read(986)
+                file_read = file_text.read(987)
                 if not file_read:
                     print("End Of File")
                     not_eof = False
@@ -188,7 +193,10 @@ class Client():
                 log.append([address, port, "DATA", len(message.get_bits()), cur_seq, cur_ack])
                 # self.client_sock.settimeout(self.timeout)
                 while (1):
+                    self.packets_sent += 1
+                    self.data_sent +=8000
                     start = time.perf_counter()
+
                     self.client_sock.sendto(message.get_bits(), (address, port))
 
                     self.packets_sent += 1
@@ -269,6 +277,7 @@ class Client():
                 message = TCP_header(port, cur_seq, cur_ack, 0, 0, 1, "")
 
                 log.append([address, port, "FIN", len(message.get_bits())])
+                self.data_sent +=104
                 self.client_sock.sendto(message.get_bits(), (address, port))
 
                 data, addr = self.client_sock.recvfrom(1024)
@@ -281,10 +290,11 @@ class Client():
             message = TCP_header(port, cur_seq, cur_ack, 0, 1, 0, "")
 
             log.append([address, port, "ACK", len(message.get_bits())])
+            self.data_sent += 104
             self.client_sock.sendto(message.get_bits(), (address, port))
 
         print("connection closed")
-        self.connection == 0
+        self.connection = 0
         self.client_sock.close()
 
 
@@ -296,15 +306,15 @@ def bits_to_header(bits):
     ack_num = int(bits[64:96], 2)
     unused = int(bits[96:100], 2)
     cwr = int(bits[100], 2)
-    ece = int(bits[101], 2)
+    #ece = int(bits[101], 2)
     print("in bits_to_header", ack_num)
-    syn = int(bits[102], 2)
+    syn = int(bits[101], 2)
     print(syn)
-    ack = int(bits[103], 2)
-    fin = int(bits[104], 2)
+    ack = int(bits[102], 2)
+    fin = int(bits[103], 2)
     print("in bits to header 1")
     try:
-        data_string = bits[105:]
+        data_string = bits[104:]
         data = ""
         length = len(data_string) / 8
 
@@ -331,8 +341,10 @@ if __name__ == '__main__':
         client.udpconnect(handshake_message, server_ip, client.data_port, file)
         end = time.perf_counter()
         time_elapsed = end-start
-        print("Time to send file:", time_elapsed)
-        percent = client.packet_losses / client.packets_sent
+        print("Time to send file (seconds)s:", time_elapsed)
+        bandwidth = client.data_sent/time_elapsed
+        print("Bandwidth achieved (bits/second):", bandwidth)
+        percent = client.packet_losses*100 / client.packets_sent
         print("Packet loss percent:", percent)
 
     for i in range(0, len(log)):

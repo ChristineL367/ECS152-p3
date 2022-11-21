@@ -32,7 +32,7 @@ class TCP_header():
         # self.header_length = 0 # 4 bits
         self.unused = 0 # 4 bits
         self.CWR = 0 # 1 bit
-        self.ECE = 0 # 1 bit
+        #self.ECE = 0 # 1 bit
         # self.URG = 0 # 1 bit
         self.ACK = ack  # ack flag 0 if not ack, 1 if syn-ack or ack
         # self.PSH = 0 # 1 bit
@@ -51,7 +51,7 @@ class TCP_header():
         bits += '{0:032b}'.format(self.ACK_num)
         bits += '{0:04b}'.format(self.unused)
         bits += '{0:01b}'.format(self.CWR)
-        bits += '{0:01b}'.format(self.ECE)
+        #bits += '{0:01b}'.format(self.ECE)
         bits += '{0:01b}'.format(self.SYN)
         bits += '{0:01b}'.format(self.ACK)
         bits += '{0:01b}'.format(self.FIN)
@@ -190,7 +190,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
                         if message.get_type() == "FIN":
                             data_closeconnection(sock, 0, cur_seq, cur_ack+1, address[0], address[1], sock.getsockname()[
                                 1])
-                            
+
                         print(packet)
                         print(message.data)
                         bits = len(packet.decode())
@@ -240,15 +240,15 @@ def bits_to_header(bits):
     ack_num = int(bits[64:96], 2)
     unused = int(bits[96:100], 2)
     cwr = int(bits[100], 2)
-    ece = int(bits[101], 2)
+    #ece = int(bits[101], 2)
     print("in bits_to_header", ack_num)
-    syn = int(bits[102], 2)
+    syn = int(bits[101], 2)
     print(syn)
-    ack = int(bits[103], 2)
-    fin = int(bits[104], 2)
+    ack = int(bits[102], 2)
+    fin = int(bits[103], 2)
     print("in bits to header 1")
     try:
-        data_string = bits[105:]
+        data_string = bits[104:]
         data = ""
         length = len(data_string) / 8
 
