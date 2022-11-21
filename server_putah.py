@@ -7,7 +7,7 @@ import binascii
 import selectors
 import time
 import types
-log = []
+# log = []
 sel = selectors.DefaultSelector()
 
 class connection():
@@ -105,7 +105,7 @@ def accept(welcome_socket, port): #basically accept
             synack.custom_message(1, 1, 0)
 
             got_syn = 1
-            log.append([address[0], address[1], "SYNACK", len(synack.get_bits())])
+            # log.append([address[0], address[1], "SYNACK", len(synack.get_bits())])
             send_packet(synack.get_bits(), address[0], address[1], welcome_socket)
 
         packet2, address2 = welcome_socket.recvfrom(1024)
@@ -165,7 +165,7 @@ def service_connection(key, mask):
                 response = TCP_header(address[1], cur_seq, cur_ack, 0, 0, 0, "Pong", sock.getsockname()[1])
                 packet = response.get_bits()
 
-                log.append([address[0], address[1], "DATA", len(packet)])
+                # log.append([address[0], address[1], "DATA", len(packet)])
 
                 data.outb += packet
             else:
@@ -210,7 +210,7 @@ def welcoming_closeconnection(welcome_socket, putah, cur_seq, cur_ack, address, 
             message = TCP_header(dst_port,cur_seq,cur_ack,0,0,0, "", src_port)
             message.FIN = 1
 
-            log.append([address, dst_port, "FIN", len(message.get_bits())])
+            # log.append([address, dst_port, "FIN", len(message.get_bits())])
             welcome_socket.sendto(message.get_bits(), (address, dst_port))
 
             data, addr = welcome_socket.recvfrom(1024)
@@ -222,7 +222,7 @@ def welcoming_closeconnection(welcome_socket, putah, cur_seq, cur_ack, address, 
         message = TCP_header(dst_port,cur_seq,cur_ack+1,0,0,0, "", src_port)
         message.ACK = 1
 
-        log.append([address, dst_port, "ACK", len(message.get_bits())])
+        # log.append([address, dst_port, "ACK", len(message.get_bits())])
         welcome_socket.sendto(message.get_bits(), (address, dst_port))
 
     print("closing connection for port ")
@@ -242,7 +242,7 @@ def data_closeconnection(curconnection,putah, cur_seq, cur_ack, address, dst_por
             message.FIN = 1
 
             print("in data fin")
-            log.append([address, dst_port, "FIN", len(message.get_bits())])
+            # log.append([address, dst_port, "FIN", len(message.get_bits())])
             curconnection.data_port.sendto(message.get_bits(), (address, dst_port))
 
             data, addr = curconnection.data_port.recvfrom(1024)
