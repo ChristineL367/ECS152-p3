@@ -9,6 +9,7 @@ import time
 import types
 log = []
 sel = selectors.DefaultSelector()
+address_var = None
 
 class connection():
     def __init__(self):
@@ -137,7 +138,8 @@ def service_connection(key, mask):
     try:
         sock = key.fileobj
         data = key.data
-        address = 0
+        global address_var
+        
         if mask & selectors.EVENT_READ:
             # print the event
             print(f"Read event for {data.addr}")
@@ -145,6 +147,7 @@ def service_connection(key, mask):
 
             packet, address = sock.recvfrom(1024)  # check this size
 
+            address_var = address
             if packet:
                 # If we have received data, store it in the data object
                 message = bits_to_header(packet)
@@ -153,6 +156,7 @@ def service_connection(key, mask):
                 cur_ack = message.sequence_num + len(message.data) * 8
                 print("sending seq: ", cur_seq, " ack: ", cur_ack)
                 if message.get_type() == "FIN":
+                    address1 = 0
                     data_closeconnection(sock, 0, cur_seq, cur_ack+1, address[0], address[1], sock.getsockname()[
                         1])
                 print(packet)
@@ -168,6 +172,7 @@ def service_connection(key, mask):
                 log.append([address[0], address[1], "DATA", len(packet)])
 
                 data.outb += packet
+                print("address: if statement", address)
             else:
                 # If we have received no data, it means the connection is closed
                 print(f"Closing connection to {data.addr}")
@@ -177,9 +182,11 @@ def service_connection(key, mask):
             # If we can write, it means the socket is ready to send data
             if data.outb:
                 # If we have data to send, send it
-                if address:
+                print("address: in data.outb", address_var)
+                if address_var != None:
                     #print(f"Echoing {data.outb!r} to {data.addr}")
-                    sent = sock.sendto(data.outb, (address[0], address[1]))
+                    
+                    sent = sock.sendto(data.outb, (address_var[0], address_var[1]))
                     data.outb = data.outb[sent:]
     except KeyboardInterrupt:
         print("Keyboard Interruption")

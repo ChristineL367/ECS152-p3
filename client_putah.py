@@ -224,7 +224,7 @@ def writetofile(port):
     file_name = str(port) + "_putah.txt"
     with open(file_name, 'w') as f:
          for i in range(0, len(log)):
-            f.write(log[i][0], " | ", log[i][1], " | ", log[i][2], " | ", log[i][3], " | ", log[i][4], "|", log[i][5])
+            f.write(str(log[i][0]) + " | " + str(log[i][1]) + " | "+ str(log[i][2])+ " | " + str(log[i][3]) + " | " + str(log[i][4]) + "\n")
 
 if __name__ == '__main__':
     server_ip = sys.argv[2]
