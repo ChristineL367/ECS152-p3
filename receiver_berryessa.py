@@ -117,7 +117,7 @@ def accept(welcome_socket, port, packet_loss, jitter): #basically accept
                 synack.custom_message(1, 1, 0)
 
                 got_syn = 1
-                log.append([address[0], address[1], "SYNACK", len(synack.get_bits())])
+                log.append([address[0], address[1], "SYNACK", len(synack.get_bits())], time.time())
                 jit = random.uniform(0, 1)
                 if jit >= jitter:
 
@@ -152,7 +152,7 @@ def accept(welcome_socket, port, packet_loss, jitter): #basically accept
         print("Keyboard Interruption")
         welcoming_closeconnection(welcome_socket,1, cur_seq, cur_ack, address[0], address[1], welcome_socket.getsockname()[1]) ##############
         return 0
-def service_connection(key, mask, packet_loss, jitter, output_file):
+def service_connection(key, mask, packet_loss, jitter, output_file, bdp):
     # Get the socket from the key
     sock = key.fileobj
     data = key.data
@@ -160,6 +160,8 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
     cur_seq = 0
     cur_ack = 0
     port = sock.getsockname()[1]
+
+    cw_bits = 0
 
     try:
         os.makedirs(str(port))
@@ -209,7 +211,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
                         response = TCP_header(address[1], message.ACK_num, message.sequence_num+bits, 0, 1, 0, "", sock.getsockname()[1])
                         packet = response.get_bits()
 
-                        log.append([address[0], address[1], "DATA", len(packet)])
+                        log.append([address[0], address[1], "DATA", len(packet)], time.time())
 
                         data.outb += packet
                     else:
@@ -271,7 +273,7 @@ def welcoming_closeconnection(welcome_socket, putah, cur_seq, cur_ack, address, 
             message = TCP_header(dst_port,cur_seq,cur_ack,0,0,0, "", src_port)
             message.FIN = 1
 
-            log.append([address, dst_port, "FIN", len(message.get_bits())])
+            log.append([address, dst_port, "FIN", len(message.get_bits())], time.time())
             welcome_socket.sendto(message.get_bits(), (address, dst_port))
 
             data, addr = welcome_socket.recvfrom(1024)
@@ -283,7 +285,7 @@ def welcoming_closeconnection(welcome_socket, putah, cur_seq, cur_ack, address, 
         message = TCP_header(dst_port,cur_seq,cur_ack+1,0,0,0, "", src_port)
         message.ACK = 1
 
-        log.append([address, dst_port, "ACK", len(message.get_bits())])
+        log.append([address, dst_port, "ACK", len(message.get_bits())], time.time())
         welcome_socket.sendto(message.get_bits(), (address, dst_port))
 
     print("closing connection for port ")
@@ -303,7 +305,7 @@ def data_closeconnection(curconnection,putah, cur_seq, cur_ack, address, dst_por
             message.FIN = 1
 
             print("in data fin")
-            log.append([address, dst_port, "FIN", len(message.get_bits())])
+            log.append([address, dst_port, "FIN", len(message.get_bits())], time.time())
             curconnection.data_port.sendto(message.get_bits(), (address, dst_port))
 
             data, addr = curconnection.data_port.recvfrom(1024)
@@ -317,7 +319,7 @@ def data_closeconnection(curconnection,putah, cur_seq, cur_ack, address, dst_por
         message = TCP_header(dst_port,cur_seq,cur_ack,0,0,0, "", src_port)
         message.ACK = 1
 
-        log.append([address, dst_port, "ACK", len(message.get_bits())])
+        log.append([address, dst_port, "ACK", len(message.get_bits())], time.time())
         curconnection.sendto(message.get_bits(), (address, dst_port))
 
     print("closing connection for port ")
@@ -342,7 +344,8 @@ if __name__ == '__main__':
     port = int(sys.argv[4])
     packet_loss = int(sys.argv[6])
     jitter = float(sys.argv[8])
-    output_file = sys.argv[10]
+    bdp = int(sys.argv[10])
+    output_file = sys.argv[12]
     lsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     lsock.bind((client_ip, port))
@@ -360,7 +363,7 @@ if __name__ == '__main__':
                     accept_wrapper(key.fileobj, port, packet_loss, jitter)
                 else:
 
-                    service_connection(key, mask, packet_loss, jitter, output_file)
+                    service_connection(key, mask, packet_loss, jitter, output_file, bdp)
     except KeyboardInterrupt:
         print("keyboard interrupt")
     finally:
