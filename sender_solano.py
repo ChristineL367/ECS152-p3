@@ -15,9 +15,9 @@ class TCP_header():
         self.sequence_num = seq_num  # 32 bits
         self.ACK_num = ack_num  # 32 bits
         # self.header_length = 0 # 4 bits
-        self.unused = 0 # 4 bits
-        self.CWR = 0 # 1 bit
-        self.ECE = 0 # 1 bit
+        self.unused = 0  # 4 bits
+        self.CWR = 0  # 1 bit
+        self.ECE = 0  # 1 bit
         # self.URG = 0 # 1 bit
         self.ACK = ack  # ack flag 0 if not ack, 1 if syn-ack or ack
         # self.PSH = 0 # 1 bit
@@ -65,6 +65,7 @@ class TCP_header():
         elif self.data != "":
             return "DATA"
 
+
 class Client():
     def __init__(self):
         self.client_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -96,9 +97,10 @@ class Client():
             print("start handshake")
             log.append([address, port, "SYN", len(message_syn.get_bits())])
             while (1):
-                self.packets_sent +=1
+                self.packets_sent += 1
                 start = time.perf_counter()
                 self.client_sock.sendto(message_syn.get_bits(), (address, port))
+
                 try:
                     # receive second handshake
                     self.client_sock.settimeout(self.timeout)
@@ -106,13 +108,18 @@ class Client():
                     self.client_sock.settimeout(None)
                     end = time.perf_counter()
                     # VERY FIRST RTT VALUE WE GET!
-                    self.SRTT = start - end
+                    self.SRTT = end-start
                     self.RTTVAR = self.SRTT / 2
                     self.timeout = self.SRTT + max(6, 4 * self.RTTVAR)
                     break
                 except socket.timeout:
-                    self.packet_losses +=1
-                    print("RESEND")
+                    end = time.perf_counter()
+                    # VERY FIRST RTT VALUE WE GET!
+                    self.SRTT = end - start
+                    self.RTTVAR = self.SRTT / 2
+                    self.timeout = self.SRTT + max(6, 4 * self.RTTVAR)
+                    self.packet_losses += 1
+
                     continue
 
             # time.sleep(3)
@@ -126,7 +133,7 @@ class Client():
             curr_ack = message_synack.sequence_num
 
             if message_synack.FIN == 1:
-                self.closeconnection(1, message_synack.ACK_num, message_synack.sequence_num+1, address, port)
+                self.closeconnection(1, message_synack.ACK_num, message_synack.sequence_num + 1, address, port)
 
             if (message_synack.SYN == 1 and message_synack.ACK == 1):
                 # send third handshake
@@ -166,7 +173,7 @@ class Client():
                     not_eof = False
                     break
 
-                message = TCP_header(port,cur_seq,cur_ack,0,0,0, file_read)
+                message = TCP_header(port, cur_seq, cur_ack, 0, 0, 0, file_read)
                 print("line: ", message.data)
 
                 print("sending", "seq: ", message.sequence_num, "ack: ", message.ACK_num)
@@ -183,14 +190,16 @@ class Client():
                 while (1):
                     start = time.perf_counter()
                     self.client_sock.sendto(message.get_bits(), (address, port))
-                    self.packets_sent +=1
+
+                    self.packets_sent += 1
+                    self.client_sock.settimeout(self.timeout)
                     try:
-                        self.client_sock.settimeout(self.timeout)
+
                         data, addr = self.client_sock.recvfrom(1024)
                         self.client_sock.settimeout(None)
                         end = time.perf_counter()
-                        new_est = (1 - .125) * self.SRTT + .125 * (start - end)
-                        new_dev = (1 - .25) * self.RTTVAR + .25 * abs(self.SRTT - ((start - end) / 2))
+                        new_est = (1 - .125) * self.SRTT + .125 * (end-start)
+                        new_dev = (1 - .25) * self.RTTVAR + .25 * abs(self.SRTT - ((end-start) / 2))
                         self.SRTT = new_est
 
                         self.RTTVAR = new_dev
@@ -207,37 +216,38 @@ class Client():
 
                         if message.FIN == 1:
                             file_text.close()
-                            self.closeconnection(1, cur_seq, cur_ack+1, address, port)
+                            self.closeconnection(1, cur_seq, cur_ack + 1, address, port)
                             break
 
                         if message.ACK == 1:
                             print(data)
                             print("client: ", message.data, "seq: ", message.sequence_num, "ack: ", message.ACK_num)
-                            print("received: ack: ", message.ACK_num, " seq: ",message.sequence_num )
+                            print("received: ack: ", message.ACK_num, " seq: ", message.sequence_num)
                             cur_seq = message.ACK_num
                             cur_ack = 1 + message.sequence_num
                             break
 
-                        # if message.data == "Pong":
-                        #     cur_seq = message.ACK_num
-                        #     cur_ack = len(message.data) + message.sequence_num
-                        #     time.sleep(3)
-                        #     continue
-                        # else:
-                        #     print("wrong data from server")
-                        #     self.closeconnection(2, cur_seq, cur_ack,  address, port)
                         break
                     except socket.timeout:
                         # self.timeout +=1
-                        self.packet_losses +=1
-                        print("RESEND")
+                        end = time.perf_counter()
+                        new_est = (1 - .125) * self.SRTT + .125 * (end - start)
+                        new_dev = (1 - .25) * self.RTTVAR + .25 * abs(self.SRTT - ((end - start) / 2))
+                        self.SRTT = new_est
+
+                        self.RTTVAR = new_dev
+                        self.timeout = self.SRTT + 4 * self.RTTVAR
+                        if self.timeout < 1:
+                            self.timeout = 1
+                        self.packet_losses += 1
+                        #print("RESEND")
                         continue
-                
+
                 if message.FIN == 1:
                     break
-            
+
             file_text.close()
-            self.closeconnection(0, cur_seq, cur_ack,  address, port)
+            self.closeconnection(0, cur_seq, cur_ack, address, port)
 
         except KeyboardInterrupt:
             print("Keyboard Interruption")
@@ -279,32 +289,33 @@ class Client():
 
 
 def bits_to_header(bits):
-        bits = bits.decode()
-        src_port = int(bits[:16], 2)
-        dst_port = int(bits[16:32], 2)
-        seq_num = int(bits[32:64], 2)
-        ack_num = int(bits[64:96], 2)
-        unused = int(bits[96:100],2)
-        cwr = int(bits[100],2)
-        ece = int(bits[101],2)
-        print("in bits_to_header", ack_num)
-        syn = int(bits[102], 2)
-        print(syn)
-        ack = int(bits[103], 2)
-        fin = int(bits[104], 2)
-        print("in bits to header 1")
-        try:
-            data_string = bits[105:]
-            data = ""
-            length = len(data_string)/8 
+    bits = bits.decode()
+    src_port = int(bits[:16], 2)
+    dst_port = int(bits[16:32], 2)
+    seq_num = int(bits[32:64], 2)
+    ack_num = int(bits[64:96], 2)
+    unused = int(bits[96:100], 2)
+    cwr = int(bits[100], 2)
+    ece = int(bits[101], 2)
+    print("in bits_to_header", ack_num)
+    syn = int(bits[102], 2)
+    print(syn)
+    ack = int(bits[103], 2)
+    fin = int(bits[104], 2)
+    print("in bits to header 1")
+    try:
+        data_string = bits[105:]
+        data = ""
+        length = len(data_string) / 8
 
-            for x in range(int(length)):
-                start = x*8
-                end = (x+1)*8
-                data += chr(int(str(data_string[start:end]),2))
-        except:
-            data = ""
-        return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data, src_port)
+        for x in range(int(length)):
+            start = x * 8
+            end = (x + 1) * 8
+            data += chr(int(str(data_string[start:end]), 2))
+    except:
+        data = ""
+    return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data, src_port)
+
 
 if __name__ == '__main__':
     server_ip = sys.argv[2]
@@ -319,9 +330,9 @@ if __name__ == '__main__':
         start = time.perf_counter()
         client.udpconnect(handshake_message, server_ip, client.data_port, file)
         end = time.perf_counter()
-        time_elapsed = start - end
+        time_elapsed = end-start
         print("Time to send file:", time_elapsed)
-        percent = client.packet_losses/client.packets_sent
+        percent = client.packet_losses / client.packets_sent
         print("Packet loss percent:", percent)
 
     for i in range(0, len(log)):
@@ -330,7 +341,9 @@ if __name__ == '__main__':
 # handshake:
 
 # client: s=0 a=0  server: s=0, a=1
-# client: s=1, a=1 
+# client: s=1, a=1
 # client: s=1 a=1 server: s=1 a=5
 # cleint: s=5 a=5 server: s=5 a=9
 # client: s=9 a=9
+
+#python3 sender_solano.py --ip 127.0.0.1 --dest_port 32007 --input alice29.txt
