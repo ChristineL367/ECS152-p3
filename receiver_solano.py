@@ -6,6 +6,7 @@ import socket
 import binascii
 import time
 import random
+import os
 
 log = []
 
@@ -186,71 +187,76 @@ class Server():
     def data(self, packet_loss, jitter, output_file):
 
         # separate from welcome thread
-        port = connection.data_port.getsockname()[1]
-
-        f = open("{"+str(port)+"}"+"/"+output_file, "w")
-
+        port = self.curconnection.data_port.getsockname()[1]
 
         try:
-            while (1):
-                # try:
-                # self.data_socket.listen()
-                packet, address = self.curconnection.data_port.recvfrom(8000)  # check this size
-                x = random.randrange(0, 100)
-                if x <= packet_loss:
-                    continue
-                message = self.bits_to_header(packet)
-                bits = len(packet.decode())
-                cur_seq = message.ACK_num
-                cur_ack = message.sequence_num + bits
+            os.makedirs(str(port))
+        except OSError:
+            print ("Creation of the directory %s failed" % port)
 
-                print("received seq: ", message.sequence_num, " ack: ", message.ACK_num)
-                if message.get_type() == "FIN":
-                    self.data_closeconnection(0, cur_seq, cur_ack, address[0], address[1],
-                                              self.curconnection.data_port.getsockname()[
-                                                  1])  # figure out how to end the connection here
-                    break
-                print(packet)
-                print(message.data)
-                # if message.data == "Ping":
-                #     print("correct ping")
-                # else:
-                #     print("wrong data")
-                #     print(message.data)
 
-                bits = len(packet.decode())
+        with open(os.path.join(str(port), output_file), 'w') as f:
 
-                print("num of bits: ", bits)
+            try:
+                while (1):
+                    # try:
+                    # self.data_socket.listen()
+                    packet, address = self.curconnection.data_port.recvfrom(8000)  # check this size
+                    x = random.randrange(0, 100)
+                    if x <= packet_loss:
+                        continue
+                    message = self.bits_to_header(packet)
+                    bits = len(packet.decode())
+                    cur_seq = message.ACK_num
+                    cur_ack = message.sequence_num + bits
 
-                print("received: ack:", message.ACK_num, " sequence: ", message.sequence_num)
-                print(packet)
-                print(message.data)
+                    print("received seq: ", message.sequence_num, " ack: ", message.ACK_num)
+                    if message.get_type() == "FIN":
+                        self.data_closeconnection(0, cur_seq, cur_ack, address[0], address[1],
+                                                self.curconnection.data_port.getsockname()[
+                                                    1])  # figure out how to end the connection here
+                        break
+                    print(packet)
+                    print(message.data)
+                    # if message.data == "Ping":
+                    #     print("correct ping")
+                    # else:
+                    #     print("wrong data")
+                    #     print(message.data)
 
-                f.write(message.data)
-                print("break")
+                    bits = len(packet.decode())
 
-                # time.sleep(3)
+                    print("num of bits: ", bits)
 
-                log.append([self.curconnection.data_port.getsockname()[1], address[1], "SYN", len(message.get_bits())])
-                response = TCP_header(address[1], message.ACK_num, message.sequence_num + bits, 0, 1, 0, "",
-                                      self.curconnection.data_port.getsockname()[1])
-                packet = response.get_bits()
+                    print("received: ack:", message.ACK_num, " sequence: ", message.sequence_num)
+                    print(packet)
+                    print(message.data)
 
-                log.append([address[0], address[1], "DATA", len(packet)])
-                jit = random.uniform(0, 1)
-                # send ACK and add jitter
-                if jit >= jitter:
+                    f.write(message.data)
+                    print("break")
 
-                    self.send_packet(packet, address[0], address[1], self.curconnection.data_port, jit)
-                else:
-                    self.send_packet(packet, address[0], address[1], self.curconnection.data_port, 0)
+                    # time.sleep(3)
 
-            f.close()
-        except KeyboardInterrupt:
-            print("Server Keyboard Interruption")
-            f.close()
-            self.data_closeconnection(1, cur_seq, cur_ack, address[0], address[1],
-                                      self.curconnection.data_port.getsockname()[1])
+                    log.append([self.curconnection.data_port.getsockname()[1], address[1], "SYN", len(message.get_bits())])
+                    response = TCP_header(address[1], message.ACK_num, message.sequence_num + bits, 0, 1, 0, "",
+                                        self.curconnection.data_port.getsockname()[1])
+                    packet = response.get_bits()
+
+                    log.append([address[0], address[1], "DATA", len(packet)])
+                    jit = random.uniform(0, 1)
+                    # send ACK and add jitter
+                    if jit >= jitter:
+
+                        self.send_packet(packet, address[0], address[1], self.curconnection.data_port, jit)
+                    else:
+                        self.send_packet(packet, address[0], address[1], self.curconnection.data_port, 0)
+
+                f.close()
+            except KeyboardInterrupt:
+                print("Server Keyboard Interruption")
+                f.close()
+                self.data_closeconnection(1, cur_seq, cur_ack, address[0], address[1],
+                                        self.curconnection.data_port.getsockname()[1])
 
     def thread_handshake(self, connection):
         t = threading.Thread(target=self.handshake(connection))  # create new thread for a new client connection
