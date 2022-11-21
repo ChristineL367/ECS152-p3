@@ -111,6 +111,8 @@ def accept(welcome_socket, port): #basically accept
         packet2, address2 = welcome_socket.recvfrom(1024)
         message2 = bits_to_header(packet2)
         print("received seq: ", message2.sequence_num, " ack: ", message2.ACK_num)
+        cur_seq = message2.ACK_num
+        cur_ack = message2.sequence_num
         if message2.get_type() == "FIN":
             print("interruption")
             welcoming_closeconnection(welcome_socket,0, cur_seq, cur_ack, address[0], address[1], welcome_socket.getsockname()[1])
@@ -272,10 +274,6 @@ def accept_wrapper(sock, port):
     # Register the socket with the selector
     events = selectors.EVENT_READ | selectors.EVENT_WRITE
     sel.register(conn, events, data=data)
-
-
-
-
 
 if __name__ == '__main__':
     threads = []
