@@ -9,7 +9,7 @@ import time
 import types
 log = []
 sel = selectors.DefaultSelector()
-global client_address
+
 class connection():
     def __init__(self):
         self.connected = 0
@@ -108,7 +108,7 @@ def accept(welcome_socket, port): #basically accept
             log.append([address[0], address[1], "SYNACK", len(synack.get_bits())])
             send_packet(synack.get_bits(), address[0], address[1], welcome_socket)
 
-        packet2, client_address = welcome_socket.recvfrom(1024)
+        packet2, address2 = welcome_socket.recvfrom(1024)
         message2 = bits_to_header(packet2)
         print("received seq: ", message2.sequence_num, " ack: ", message2.ACK_num)
         cur_seq = message2.ACK_num
@@ -137,13 +137,13 @@ def service_connection(key, mask):
     try:
         sock = key.fileobj
         data = key.data
-
+        address = 0
         if mask & selectors.EVENT_READ:
             # print the event
             print(f"Read event for {data.addr}")
             # If we can read, it means the socket is ready to receive data
 
-            packet, client_address = sock.recvfrom(1024)  # check this size
+            packet, address = sock.recvfrom(1024)  # check this size
 
             if packet:
                 # If we have received data, store it in the data object
@@ -162,10 +162,10 @@ def service_connection(key, mask):
                     print("wrong data")
                     print(message.data)
 
-                response = TCP_header(client_address[1], cur_seq, cur_ack, 0, 0, 0, "Pong", sock.getsockname()[1])
+                response = TCP_header(address[1], cur_seq, cur_ack, 0, 0, 0, "Pong", sock.getsockname()[1])
                 packet = response.get_bits()
 
-                log.append([client_address[0], client_address[1], "DATA", len(packet)])
+                log.append([address[0], address[1], "DATA", len(packet)])
 
                 data.outb += packet
             else:
@@ -177,11 +177,10 @@ def service_connection(key, mask):
             # If we can write, it means the socket is ready to send data
             if data.outb:
                 # If we have data to send, send it
+                if address:
                     #print(f"Echoing {data.outb!r} to {data.addr}")
-                sent = sock.sendto(data.outb, (client_address[0], client_address[1]))
-                data.outb = data.outb[sent:]
-
-
+                    sent = sock.sendto(data.outb, (address[0], address[1]))
+                    data.outb = data.outb[sent:]
     except KeyboardInterrupt:
         print("Keyboard Interruption")
         data_closeconnection(sock, 1,cur_seq, cur_ack, address[0], address[1],sock.getsockname()[1])  ##############
