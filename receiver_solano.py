@@ -141,7 +141,8 @@ class Server():
                     synack.custom_message(1, 1, 0)
 
                     connection.got_syn = 1
-                    log.append([address[0], address[1], "SYNACK", len(synack.get_bits())])
+                    log.append([self.welcome_socket.getsockname()[1], port, "SYN", len(synack.get_bits())])
+                    
                     jit = random.uniform(0, 1)
                     if jit >= jitter:
 
@@ -182,9 +183,14 @@ class Server():
                                            self.welcome_socket.getsockname()[1])
             return 0
 
-    def data(self, packet_loss, jitter):
+    def data(self, packet_loss, jitter, output_file):
 
         # separate from welcome thread
+        port = connection.data_port.getsockname()[1]
+
+        f = open("{"+str(port)+"}"+"/"+output_file, "w")
+
+
         try:
             while (1):
                 # try:
@@ -220,10 +226,12 @@ class Server():
                 print(packet)
                 print(message.data)
 
+                f.write(message.data)
                 print("break")
 
                 # time.sleep(3)
 
+                log.append([self.curconnection.data_port.getsockname()[1], address[1], "SYN", len(message.get_bits())])
                 response = TCP_header(address[1], message.ACK_num, message.sequence_num + bits, 0, 1, 0, "",
                                       self.curconnection.data_port.getsockname()[1])
                 packet = response.get_bits()
@@ -237,9 +245,10 @@ class Server():
                 else:
                     self.send_packet(packet, address[0], address[1], self.curconnection.data_port, 0)
 
-
+            f.close()
         except KeyboardInterrupt:
             print("Server Keyboard Interruption")
+            f.close()
             self.data_closeconnection(1, cur_seq, cur_ack, address[0], address[1],
                                       self.curconnection.data_port.getsockname()[1])
 
@@ -283,10 +292,12 @@ class Server():
         if putah == 1:
             ack = False
             while ack != True:
+
+                
                 message = TCP_header(dst_port, cur_seq, cur_ack, 0, 0, 0, "", src_port)
                 message.FIN = 1
 
-                log.append([address, dst_port, "FIN", len(message.get_bits())])
+                log.append([src_port, dst_port, "FIN", len(message.get_bits())])
                 self.welcome_socket.sendto(message.get_bits(), (address, dst_port))
 
                 data, addr = self.welcome_socket.recvfrom(1024)
@@ -299,7 +310,7 @@ class Server():
             message = TCP_header(dst_port, cur_seq, cur_ack, 0, 0, 0, "", src_port)
             message.ACK = 1
 
-            log.append([address, dst_port, "ACK", len(message.get_bits())])
+            log.append([src_port, dst_port, "ACK", len(message.get_bits())])
             self.welcome_socket.sendto(message.get_bits(), (address, dst_port))
 
         print("closing connection for port ")
@@ -319,7 +330,7 @@ class Server():
                 message.FIN = 1
 
                 print("in data fin")
-                log.append([address, dst_port, "FIN", len(message.get_bits())])
+                log.append([src_port, dst_port, "FIN", len(message.get_bits())])
                 self.curconnection.data_port.sendto(message.get_bits(), (address, dst_port))
 
                 data, addr = self.curconnection.data_port.recvfrom(1024)
@@ -333,7 +344,7 @@ class Server():
             message = TCP_header(dst_port, cur_seq, cur_ack + 1, 0, 0, 0, "", src_port)
             message.ACK = 1
 
-            log.append([address, dst_port, "ACK", len(message.get_bits())])
+            log.append([src_port, dst_port, "ACK", len(message.get_bits())])
             self.curconnection.data_port.sendto(message.get_bits(), (address, dst_port))
 
         print("closing connection for port ")
@@ -386,6 +397,7 @@ if __name__ == '__main__':
     packet_loss = int(sys.argv[6])
     jitter = float(sys.argv[8])
     server_init = Server(sys.argv[4])
+    output_file = sys.argv[10]
     # new_connection = connection()#will enventually be multithreaded
     new_thread = handshakeThread(client_ip, port, server_init, packet_loss, jitter)  # will enventually be multithreaded
     # server_init.thread_data()

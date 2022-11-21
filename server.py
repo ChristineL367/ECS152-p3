@@ -22,7 +22,7 @@ class TCP_header():
         self.source_prt = src_port  # 16 bits
         self.destination_prt = dst_port # 16 bits
         self.sequence_num = seq_num  # 32 bits
-        self.ACK_num = ack # 32 bits
+        self.ACK_num = ack_num # 32 bits
         # self.header_length = 0 # 4 bits
         # self.unused = 0 # 4 bits
         # self.CWR = 0 # 1 bit
@@ -263,6 +263,8 @@ class Server():
         print("closing connection for port ")
         self.curconnection.data_port.close()
         self.curconnection.closed = 1
+
+
 class handshakeThread(Thread):
     def __init__(self, client_ip, port, server_init):
         Thread.__init__(self)

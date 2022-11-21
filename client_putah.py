@@ -84,7 +84,7 @@ class Client():
 
             print("sending: seq: ", cur_seq, " ack: ", cur_ack)
             print("start handshake")
-            log.append([address, port, "SYN", len(message.get_bits())])
+            log.append([self.client_sock.getsockname()[1], port, "SYN", len(message.get_bits())])
             self.client_sock.sendto(message.get_bits(), (address, port))
 
             # receive second handshake
@@ -113,7 +113,7 @@ class Client():
                 message_ack = TCP_header(port, cur_seq, cur_ack+1, 0, 0, 0, "")
                 message_ack.custom_message(1, 0, 0)
 
-                log.append([address, port, "ACK", len(message_ack.get_bits())])
+                log.append([self.client_sock.getsockname()[1], port, "ACK", len(message_ack.get_bits())])
                 self.client_sock.sendto(message_ack.get_bits(), (address, port))
                 
                 return [message_ack.ACK_num, message_synack.sequence_num+1]
@@ -137,7 +137,7 @@ class Client():
                 print("sending seq: ", cur_seq, " ack: ", cur_ack)
                 message = TCP_header(port, cur_seq,cur_ack,0,0,0, "Ping")
 
-                log.append([address, port, "DATA", len(message.get_bits())])
+                log.append([self.client_sock.getsockname()[1], port, "DATA", len(message.get_bits())])
                 self.client_sock.sendto(message.get_bits(), (address, port))
                 data, addr = self.client_sock.recvfrom(1024)
 
@@ -178,7 +178,7 @@ class Client():
                 # dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53):
                 message = TCP_header(port, cur_seq, cur_ack, 0, 0, 1, "")
 
-                log.append([address, port, "FIN", len(message.get_bits())])
+                log.append([self.client_sock.getsockname()[1], port, "FIN", len(message.get_bits())])
                 self.client_sock.sendto(message.get_bits(), (address, port))
 
                 data, addr = self.client_sock.recvfrom(1024)
@@ -190,7 +190,7 @@ class Client():
         elif putah == 1:
             message = TCP_header(port, cur_seq, cur_ack, 0, 1, 0, "")
 
-            log.append([address, port, "ACK", len(message.get_bits())])
+            log.append([self.client_sock.getsockname()[1], port, "ACK", len(message.get_bits())])
             self.client_sock.sendto(message.get_bits(), (address, port))
 
         print("connection closed")
