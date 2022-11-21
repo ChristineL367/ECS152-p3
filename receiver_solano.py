@@ -89,6 +89,7 @@ def accept(welcome_socket, port, packet_loss, jitter): #basically accept
             packet, address = welcome_socket.recvfrom(1024)
             x = random.randrange(0, 100)
             if x <= packet_loss:
+                print("continued")
                 continue
 
             connect = connection()
@@ -164,17 +165,19 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
         print("Creation of the directory %s failed" % port)
 
     with open(os.path.join(str(port), output_file), 'w') as f:
-        try:
-            while(1):
-                if mask & selectors.EVENT_READ:
-                    # print the event
-                    print(f"Read event for {data.addr}")
-                    # If we can read, it means the socket is ready to receive data
 
-                    packet, address = sock.recvfrom(8000)  # check this size
-                    x = random.randrange(0, 100)
-                    if x <= packet_loss:
-                        continue
+        try:
+
+            if mask & selectors.EVENT_READ:
+                # print the event
+                print(f"Read event for {data.addr}")
+                # If we can read, it means the socket is ready to receive data
+
+                packet, address = sock.recvfrom(8000)  # check this size
+                x = random.randrange(0, 100)
+                if x >= packet_loss:
+
+
                     if packet and address:
                         # If we have received data, store it in the data object
                         message = bits_to_header(packet)
@@ -187,7 +190,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
                         if message.get_type() == "FIN":
                             data_closeconnection(sock, 0, cur_seq, cur_ack+1, address[0], address[1], sock.getsockname()[
                                 1])
-                            break
+                            
                         print(packet)
                         print(message.data)
                         bits = len(packet.decode())
@@ -212,17 +215,17 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
                         print(f"Closing connection to {data.addr}")
                         sel.unregister(sock)
                         sock.close()
-                if mask & selectors.EVENT_WRITE:
-                    # If we can write, it means the socket is ready to send data
-                    if data.outb:
-                        # If we have data to send, send it
-                        #print(f"Echoing {data.outb!r} to {data.addr}")
-                        jit = random.uniform(0, 1)
-                        # send ACK and add jitter
-                        if jit >= jitter:
-                            time.sleep(jit)
-                        sent = sock.sendto(data.outb, (address[0], address[1]))
-                        data.outb = data.outb[sent:]
+            if mask & selectors.EVENT_WRITE:
+                # If we can write, it means the socket is ready to send data
+                if data.outb:
+                    # If we have data to send, send it
+                    #print(f"Echoing {data.outb!r} to {data.addr}")
+                    jit = random.uniform(0, 1)
+                    # send ACK and add jitter
+                    if jit >= jitter:
+                        time.sleep(jit)
+                    sent = sock.sendto(data.outb, (address[0], address[1]))
+                    data.outb = data.outb[sent:]
             f.close()
         except KeyboardInterrupt:
             print("Keyboard Interruption")

@@ -167,7 +167,7 @@ class Client():
             while self.connection:
                 print("in udp connect")
 
-                file_read = file_text.read(987)
+                file_read = file_text.read(986)
                 if not file_read:
                     print("End Of File")
                     not_eof = False
