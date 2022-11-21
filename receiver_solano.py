@@ -122,7 +122,7 @@ class Server():
                 print(message_syn.SYN)
 
                 cur_seq = message_syn.ACK_num
-                cur_ack = message_syn.sequence_num
+                cur_ack = message_syn.sequence_num + 1
 
                 if message_syn.get_type() == "FIN":
                     self.welcoming_closeconnection(0, cur_seq, cur_ack, address[0], address[1],
@@ -156,7 +156,7 @@ class Server():
                 message2 = self.bits_to_header(packet2)
 
                 cur_seq = message2.ACK_num
-                cur_ack = message2.sequence_num
+                cur_ack = message2.sequence_num+1
 
                 if message2.get_type() == "FIN":
                     print("interruption")
@@ -194,8 +194,11 @@ class Server():
                 if x <= packet_loss:
                     continue
                 message = self.bits_to_header(packet)
+                bits = len(packet.decode())
                 cur_seq = message.ACK_num
-                cur_ack = message.sequence_num
+                cur_ack = message.sequence_num + bits
+
+                print("received seq: ", message.sequence_num, " ack: ", message.ACK_num)
                 if message.get_type() == "FIN":
                     self.data_closeconnection(0, cur_seq, cur_ack, address[0], address[1],
                                               self.curconnection.data_port.getsockname()[
@@ -280,7 +283,7 @@ class Server():
         if putah == 1:
             ack = False
             while ack != True:
-                message = TCP_header(dst_port, cur_seq, cur_ack + 1, 0, 0, 0, "", src_port)
+                message = TCP_header(dst_port, cur_seq, cur_ack, 0, 0, 0, "", src_port)
                 message.FIN = 1
 
                 log.append([address, dst_port, "FIN", len(message.get_bits())])
@@ -293,7 +296,7 @@ class Server():
                     break
 
         elif putah == 0:
-            message = TCP_header(dst_port, cur_seq, cur_ack + 1, 0, 0, 0, "", src_port)
+            message = TCP_header(dst_port, cur_seq, cur_ack, 0, 0, 0, "", src_port)
             message.ACK = 1
 
             log.append([address, dst_port, "ACK", len(message.get_bits())])
@@ -312,7 +315,7 @@ class Server():
             ack = False
             count = 0
             while ack != True or count != 3:
-                message = TCP_header(dst_port, cur_seq, cur_ack + 1, 0, 0, 0, "", src_port)
+                message = TCP_header(dst_port, cur_seq, cur_ack, 0, 0, 0, "", src_port)
                 message.FIN = 1
 
                 print("in data fin")

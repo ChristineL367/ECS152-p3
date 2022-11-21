@@ -126,7 +126,7 @@ class Client():
             curr_ack = message_synack.sequence_num
 
             if message_synack.FIN == 1:
-                self.closeconnection(1, message_synack.ACK_num, message_synack.sequence_num, address, port)
+                self.closeconnection(1, message_synack.ACK_num, message_synack.sequence_num+1, address, port)
 
             if (message_synack.SYN == 1 and message_synack.ACK == 1):
                 # send third handshake
@@ -199,13 +199,15 @@ class Client():
                             self.timeout = 1
                         # self.client_sock.settimeout(self.timeout)
                         message = bits_to_header(data)
+                        cur_seq = message.ACK_num
+                        cur_ack = message.sequence_num
 
                         if message.get_type() != "ACK":
                             continue
 
                         if message.FIN == 1:
                             file_text.close()
-                            self.closeconnection(1, cur_seq, cur_ack, address, port)
+                            self.closeconnection(1, cur_seq, cur_ack+1, address, port)
                             break
 
                         if message.ACK == 1:
@@ -215,10 +217,6 @@ class Client():
                             cur_seq = message.ACK_num
                             cur_ack = 1 + message.sequence_num
                             break
-                        else:
-                            print("wrong data from server")
-                            file_text.close()
-                            self.closeconnection(2, cur_seq, cur_ack,  address, port)
 
                         # if message.data == "Pong":
                         #     cur_seq = message.ACK_num
@@ -258,7 +256,7 @@ class Client():
             count = 0
             while ack != True or count != 3:
                 # dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53):
-                message = TCP_header(port, cur_seq, cur_ack + 1, 0, 0, 1, "")
+                message = TCP_header(port, cur_seq, cur_ack, 0, 0, 1, "")
 
                 log.append([address, port, "FIN", len(message.get_bits())])
                 self.client_sock.sendto(message.get_bits(), (address, port))
@@ -270,7 +268,7 @@ class Client():
                     break
 
         elif putah == 1:
-            message = TCP_header(port, cur_seq, cur_ack + 1, 0, 1, 0, "")
+            message = TCP_header(port, cur_seq, cur_ack, 0, 1, 0, "")
 
             log.append([address, port, "ACK", len(message.get_bits())])
             self.client_sock.sendto(message.get_bits(), (address, port))
