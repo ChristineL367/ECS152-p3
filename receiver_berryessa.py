@@ -11,7 +11,7 @@ import types
 import os
 log = []
 sel = selectors.DefaultSelector()
-
+acks_to_send = []
 
 class connection():
     def __init__(self):
@@ -195,7 +195,6 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
 
         try:
             global acks_to_send
-            acks_to_send = []
 
             if mask & selectors.EVENT_READ:
                 global lost_ack
@@ -309,6 +308,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
                             sent = sock.sendto(i, (address_var[0], address_var[1]))
                             print("sent")
                             data.outb = i[sent:]
+                    acks_to_send = []
 
             f.close()
 
