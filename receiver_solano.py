@@ -98,7 +98,7 @@ def accept(welcome_socket, port, packet_loss, jitter): #basically accept
             cur_seq = 0
             cur_ack = message.sequence_num
             if message.get_type() == "FIN":
-                welcoming_closeconnection(welcome_socket,0, cur_seq, cur_ack,address[0], address[1], welcome_socket.getsockname()[1])
+                welcoming_closeconnection(welcome_socket, random.uniform(0, 4294967295), cur_seq, cur_ack,address[0], address[1], welcome_socket.getsockname()[1])
                 return 0
 
             if message.get_type() == "SYN":
@@ -151,12 +151,17 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
     port = sock.getsockname()[1]
     global address_var
 
-    try:
-        os.makedirs(str(port))
-    except OSError:
-        print("Creation of the directory %s failed" % port)
+    port_path = "/" + str(port)
 
-    with open(os.path.join(str(port), output_file), 'w') as f:
+    isExist = os.path.exists(os.path.join(os.getcwd(), str(port), output_file))
+    if isExist == 0: 
+        try:
+            os.makedirs(str(port))
+        except OSError:
+            print("Creation of the directory %s failed" % port)
+    
+
+    with open(os.path.join(str(port), output_file), 'a') as f:
 
         try:
 
@@ -207,7 +212,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
                     # send ACK and add jitter
                     if jit >= jitter:
                         time.sleep(jit)
-                    sent = sock.sendto(data.outb, (address[0], address[1]))
+                    sent = sock.sendto(data.outb, (address_var[0], address_var[1]))
                     data.outb = data.outb[sent:]
             f.close()
         except KeyboardInterrupt:

@@ -91,7 +91,7 @@ class Client():
 
         try:
             # first handshake (self, dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53
-            message_syn = TCP_header(port, random.uniform(0, 4294967295), 0, 0, 0, 0, "")
+            message_syn = TCP_header(port, int(random.uniform(0, 4294967295)), 0, 0, 0, 0, "")
             message_syn.custom_message(0, 1, 0)
 
             curr_seq = 0
