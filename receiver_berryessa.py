@@ -216,7 +216,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
                 if rate > bdp:
                     # congestion state
                     packet_loss *= 3
-                if x < packet_loss or lost_ack:
+                if x < packet_loss or lost_ack == True:
                     #lost packet
                     lost_ack = True
                     if packet and address:
@@ -243,6 +243,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
 
                         data.outb += packet
                         acks_to_send.append(data.outb)
+
                     else:
                         # If we have received no data, it means the connection is closed
                         print(f"Closing connection to {data.addr}")
@@ -283,6 +284,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
 
                         data.outb += packet
                         acks_to_send.append(data.outb)
+                        print(acks_to_send)
 
                     else:
                         # If we have received no data, it means the connection is closed
@@ -305,6 +307,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
                                 else:
                                     time.sleep(jit)
                             sent = sock.sendto(i, (address_var[0], address_var[1]))
+                            print("sent")
                             data.outb = i[sent:]
 
             f.close()

@@ -238,6 +238,7 @@ class Client():
                     while True:
                         try:
                             data, addr = self.client_sock.recvfrom(1024)
+                            print("GOT DATA", data)
                             self.client_sock.settimeout(None)
                             end = time.perf_counter()
                             ack_message = bits_to_header(data)
