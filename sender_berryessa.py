@@ -4,8 +4,13 @@ import binascii
 import threading
 import time
 import math
+import matplotlib.pyplot as plt
+import numpy as np
+
 log = []
 data_sent = 0
+global window_sizes
+window_sizes = []
 
 
 class TCP_header():
@@ -98,8 +103,7 @@ class Client():
             curr_seq = 0
             curr_ack = 0
 
-            print("start handshake")
-            log.append([address, port, "SYN", len(message_syn.get_bits())])
+            log.append([self.client_sock.getsockname()[1], port, "SYN", len(message_syn.get_bits()), message_syn.receive_window, time.time()])
             while (1):
                 self.packets_sent += 1
                 self.data_sent +=104
@@ -143,6 +147,9 @@ class Client():
             curr_ack = message_synack.sequence_num
 
             if message_synack.FIN == 1:
+                log.append([port, self.client_sock.getsockname()[1], "FIN", len(message_synack.get_bits()),
+                            message_synack.receive_window , time.time()])
+
                 self.closeconnection(1, message_synack.ACK_num, message_synack.sequence_num + 1, address, port)
 
             if (message_synack.SYN == 1 and message_synack.ACK == 1):
@@ -152,7 +159,8 @@ class Client():
                 message_ack = TCP_header(port, message_synack.ACK_num, message_synack.sequence_num + 1, 0, 0, 0, 1, "")
                 message_ack.custom_message(1, 0, 0)
 
-                log.append([address, port, "ACK", len(message_ack.get_bits())])
+                log.append([port, self.client_sock.getsockname()[1], "SYNACK", len(message_synack.get_bits()), message_synack.receive_window, time.time()])
+                log.append([self.client_sock.getsockname()[1], port, "ACK", len(message_ack.get_bits()), message_ack.receive_window, time.time()])
 
                 self.data_sent +=104
                 self.client_sock.sendto(message_ack.get_bits(), (address, port))
@@ -183,15 +191,20 @@ class Client():
         tcp_change = 0
 
         try:
-            while self.connection:
+            while self.connection and not_eof == True:
                 print("in udp connect")
 
                 tracker = len(pts)
                 if tracker != 0:
-                    cur_seq = pts[-1] + 1000
+                    cur_seq = pts[len(pts)-1] + 1000
 
-                while(len(pts) < window and not_eof == True and tracker != window):
+                window_sizes.append(window)
+                while(len(pts) < window and not_eof == True):
+                    print("in loop")
                     if cur_seq in file_data:
+                        message = file_data[cur_seq]
+                        #message.receive_window = window
+                        pts.append(cur_seq)
                         cur_seq += 1000
                         tracker += 1
                         continue
@@ -212,15 +225,16 @@ class Client():
                     cur_seq += 1000
                     tracker += 1
 
-                    log.append([address, port, "DATA", len(message.get_bits()), cur_seq, cur_ack])
+                    log.append([self.client_sock.getsockname()[1], port, "DATA", len(message.get_bits()), message.receive_window, time.time()])
                 # self.client_sock.settimeout(self.timeout)
-                print(file_data.keys())
+                # print(file_data.keys())
                 # print(cur_seq)
-                print("window: ", window)
+
                 while (1):
                     # self.packets_sent += 1
                     # self.data_sent +=8000 #bandwidth
                     start = time.perf_counter()
+                    print("LENGTH PTS:",len(pts))
 
                     for i in range(len(pts)):
                         
@@ -296,6 +310,8 @@ class Client():
 
                             if ack_message.FIN == 1:
                                 print("in fin")
+                                log.append([port, self.client_sock.getsockname()[1], "FIN", len(message.get_bits()), message.receive_window, time.time()])
+
                                 file_text.close()
                                 self.closeconnection(1, cur_seq, cur_ack + 1, address, port)
                                 break
@@ -307,6 +323,8 @@ class Client():
                             #     cur_seq += ACK_num
                             #     cur_ack = 1 + message.sequence_num
                             #     break
+                            log.append([port, self.client_sock.getsockname()[1], "FIN", len(message.get_bits()), message.receive_window, time.time()])
+
                             self.client_sock.settimeout(self.timeout)
 
                         except socket.timeout:
@@ -316,6 +334,10 @@ class Client():
                     if acks_recv == []:
                         print("in no receive")
                         # set new timeout value
+                        if len(temp) == 0:
+                            break
+                        message = file_data[temp[0]]
+
                         end = time.perf_counter()
                         if tcp_vers == "tahoe":
                             message.receive_window = 1  # bring window all the way back to 1
@@ -334,17 +356,19 @@ class Client():
                             self.timeout = 1
                         self.packet_losses += 1
                         #print("RESEND")
-                        pts = temp
+                        pts = [temp[0]]
                         break
 
                     else:
                         if len(acks) >=3: #received 3 acks now, can start checking if we lost a packet
+                            if len(acks_recv) < window:
+                                #we got fewer packets than we sent
+                                pass
+
                             if len(set(acks[(len(acks)-3):len(acks)])) == 1:#got three duplicate acks
                             #CREATE OLD PACKET TO SEND AGAIN!!
                                 print("3 duplicate ACKS, resend packet from 3 packets ago")
                                 # message.sequence_num = cur_seq - 3000 #take us back to previous lost sequence to resend
-
-                                
                                 message = file_data[acks[-1]]
                                 if tcp_vers == "tahoe":
                                     message.receive_window = 1  # bring window all the way back to 1
@@ -354,7 +378,7 @@ class Client():
                                     window = message.receive_window
                                 tcp_change = 1
                                 #set new timeout value
-                                pts.append(message)
+                                pts.append(message.sequence_num)
                                 new_est = (1 - .125) * self.SRTT + .125 * (end - start)
                                 new_dev = (1 - .25) * self.RTTVAR + .25 * abs(self.SRTT - ((end - start) / 2))
                                 self.SRTT = new_est
@@ -365,22 +389,22 @@ class Client():
                                     self.timeout = 1
                                 break
                             else:
-                                if message.receive_window < ssthreshold:
+                                if message.receive_window <= ssthreshold:
 
                                     message.receive_window *= 2  # double window after 1 RTT if within ssthresh
-                                    window = message.receive_window 
+                                    window = message.receive_window
                                 else:
                                     ssthreshold /= 2  # cut ssthreshold in half once threshold reached
                                     message.receive_window += 1  # increment window by 1 after threshhold reached
-                                    window = message.receive_window 
+                                    window = message.receive_window
                                 break
 
                         else:
                             print("increase window")
-                            if message.receive_window < ssthreshold:
+                            if message.receive_window <= ssthreshold:
 
                                 message.receive_window *= 2  # double window after 1 RTT if within ssthresh
-                                window = message.receive_window  
+                                window = message.receive_window
                             else:
                                 ssthreshold /= 2  # cut ssthreshold in half once threshold reached
                                 message.receive_window += 1  # increment window by 1 after threshhold reached
@@ -416,7 +440,7 @@ class Client():
                 # dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53):
                 message = TCP_header(port, cur_seq, cur_ack, 0, 0, 1, 1, "")
 
-                log.append([address, port, "FIN", len(message.get_bits())])
+                log.append([self.client_sock.getsockname()[1], port, "FIN", len(message.get_bits()), message.receive_window, time.time()])
                 self.data_sent +=104
                 self.client_sock.sendto(message.get_bits(), (address, port))
 
@@ -429,7 +453,7 @@ class Client():
         elif putah == 1:
             message = TCP_header(port, cur_seq, cur_ack, 0, 1, 0, 1, "")
 
-            log.append([address, port, "ACK", len(message.get_bits())])
+            log.append([self.client_sock.getsockname()[1], port, "ACK", len(message.get_bits()), message.receive_window, time.time()])
             self.data_sent += 104
             self.client_sock.sendto(message.get_bits(), (address, port))
 
@@ -466,6 +490,23 @@ def bits_to_header(bits):
         data = ""
     return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, receive_window,data, src_port)
 
+def writetofile(port):
+    file_name = str(port) + "_solano.txt"
+    with open(file_name, 'w') as f:
+         for i in range(0, len(log)):
+            f.write(str(log[i][0]) + " | " + str(log[i][1]) + " | "+ str(log[i][2])+ " | " + str(log[i][3]) + " | " + str(log[i][4]) + "|" + str(log[i][5]) + "\n")
+
+def create_graph(tcp_version):
+    y_points = np.array(window_sizes)
+
+    plt.plot(y_points)
+    plt.title(tcp_version + " Graph")
+    plt.xlabel("Transmission Round")
+    plt.ylabel("Congestion Window")
+
+    plt.savefig(tcp_version + ".png")
+
+
 if __name__ == '__main__':
     server_ip = sys.argv[2]
     port = int(sys.argv[4])
@@ -487,9 +528,8 @@ if __name__ == '__main__':
         percent = client.packet_losses*100 / client.packets_sent
         print("Packet loss percent:", percent)
 
-    for i in range(0, len(log)):
-        print(log[i][0], " | ", log[i][1], " | ", log[i][2], " | ", log[i][3])
-
+    writetofile(client.data_port)
+    create_graph(tcp_vers)
 # handshake:
 
 # client: s=0 a=0  server: s=0, a=1

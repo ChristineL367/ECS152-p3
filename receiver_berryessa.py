@@ -10,6 +10,7 @@ import random
 import types
 import os
 log = []
+written = []
 sel = selectors.DefaultSelector()
 acks_to_send = []
 current_ack = None
@@ -163,7 +164,7 @@ def accept(welcome_socket, port, packet_loss, jitter, bdp): #basically accept
 
             if message2.get_type() == "ACK":
                 print("check ack")
-                connect.data_port.setblocking(False)
+                #connect.data_port.setblocking(False)
                 curconnection = connect
 
                 return curconnection.data_port, address2
@@ -193,7 +194,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
         except OSError:
             print("Creation of the directory %s failed" % port)
 
-    with open(os.path.join(str(port), output_file), 'w') as f:
+    with open(os.path.join(str(port), output_file), 'a') as f:
 
         try:
             global acks_to_send
@@ -244,10 +245,12 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
 
                         bits = len(packet.decode())
 
+                        if cur_seq not in written:
 
-                        f.write(message.data)
+                            f.write(message.data)
+                            written.append(cur_seq)
                         #print("break")
-                        response = TCP_header(address[1], message.ACK_num, message.sequence_num+bits, 0, 1, 0, message.receive_window,"", sock.getsockname()[1])
+                        response = TCP_header(address[1], current_ack, message.sequence_num+bits, 0, 1, 0, message.receive_window,"", sock.getsockname()[1])
                         packet = response.get_bits()
 
                         log.append([address[0], address[1], "DATA", len(packet)])
@@ -292,7 +295,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
                         response = TCP_header(address[1], message.ACK_num, message.sequence_num+bits, 0, 1, 0, message.receive_window,"", sock.getsockname()[1])
                         packet = response.get_bits()
 
-                        print("seq: ", response.sequence_num, "ack: ", response.ACK_num)
+                        print("WE SEND seq: ", response.sequence_num, "ack: ", response.ACK_num)
 
                         log.append([address[0], address[1], "DATA", len(packet)])
 
@@ -316,7 +319,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
                     address_var = address
                     message = bits_to_header(packet)
 
-                    if prev != 0 and message.sequence_num != prev+1000:
+                    if prev != 0 and message.sequence_num != prev+1:
                         lost_ack = True
                     if lost_ack != False:
                         current_ack = message.sequence_num
@@ -344,11 +347,11 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
                                                      sock.getsockname()[
                                                          1], message.receive_window)
 
-                            bits = len(packet.decode())
+                            bits = int(len(packet.decode())/8)
 
                             f.write(message.data)
                             # print("break")
-                            response = TCP_header(address[1], message.ACK_num, message.sequence_num + bits, 0, 1, 0,
+                            response = TCP_header(address[1], current_ack, message.sequence_num + bits, 0, 1, 0,
                                                   message.receive_window, "", sock.getsockname()[1])
                             packet = response.get_bits()
 
@@ -381,7 +384,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
 
                             print(packet)
                             print(message.data)
-                            bits = len(packet.decode())
+                            bits = int(len(packet.decode())/8)
 
                             print("num of bits: ", bits)
 
@@ -409,6 +412,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
                             sel.unregister(sock)
                             sock.close()
             if mask & selectors.EVENT_WRITE:
+                print(acks_to_send)
                 if acks_to_send != []:
                     # If we can write, it means the socket is ready to send data
                     for i in acks_to_send:
@@ -529,7 +533,7 @@ def accept_wrapper(sock, port,packet_loss, jitter, bdp):
     conn, addr = accept(sock, port, packet_loss, jitter,bdp)
     print(f"Accepted connection from {addr}")
     # Set the socket to non-blocking
-    conn.setblocking(False)
+    #conn.setblocking(False)
     # Create a data object to store the connection id and the messages
     data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")
     # Register the socket with the selector
