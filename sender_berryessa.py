@@ -149,7 +149,7 @@ class Client():
                 # send third handshake
                 print("check synack")
                 self.connection = True
-                message_ack = TCP_header(port, message_synack.ACK_num, message_synack.sequence_num + 1, 0, 0, 0, "")
+                message_ack = TCP_header(port, message_synack.ACK_num, message_synack.sequence_num + 1, 0, 0, 0, 1, "")
                 message_ack.custom_message(1, 0, 0)
 
                 log.append([address, port, "ACK", len(message_ack.get_bits())])
@@ -173,12 +173,12 @@ class Client():
         cur_seq = prev_message[0]
         cur_ack = prev_message[1]
 
-        window = recv_window # from input
+        window = 1 # from input
 
         file_text = open(file, "r")
         not_eof = True
 
-        pts = {}
+        pts = []
         temp = None
         tcp_change = 0
 
@@ -204,22 +204,26 @@ class Client():
                         break
 
                     file_data[cur_seq] = file_read #dictionary of file data that we sent corresponding to its sequence num
-                    message = TCP_header(port, cur_seq, cur_ack, 0, 0, 0, file_read)
+                    message = TCP_header(port, cur_seq, cur_ack, 0, 0, 0, window, file_read)
 
                     file_data[cur_seq] = message
+    
                     pts.append(cur_seq)
                     cur_seq += 1000
                     tracker += 1
 
                     log.append([address, port, "DATA", len(message.get_bits()), cur_seq, cur_ack])
                 # self.client_sock.settimeout(self.timeout)
+                print(file_data.keys())
+                print(cur_seq)
                 while (1):
                     # self.packets_sent += 1
                     # self.data_sent +=8000 #bandwidth
                     start = time.perf_counter()
 
-                    for i in cur_seq:
-                        packet = file_data.get(i)                    
+                    for i in range(len(pts)):
+                        
+                        packet = file_data[pts[i]]                  
                         self.client_sock.sendto(packet.get_bits(), (address, port))
                         
                         self.packets_sent += 1
@@ -393,7 +397,7 @@ class Client():
             count = 0
             while ack != True or count != 3:
                 # dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53):
-                message = TCP_header(port, cur_seq, cur_ack, 0, 0, 1, "")
+                message = TCP_header(port, cur_seq, cur_ack, 0, 0, 1, 1, "")
 
                 log.append([address, port, "FIN", len(message.get_bits())])
                 self.data_sent +=104
@@ -406,7 +410,7 @@ class Client():
                     break
 
         elif putah == 1:
-            message = TCP_header(port, cur_seq, cur_ack, 0, 1, 0, "")
+            message = TCP_header(port, cur_seq, cur_ack, 0, 1, 0, 1, "")
 
             log.append([address, port, "ACK", len(message.get_bits())])
             self.data_sent += 104

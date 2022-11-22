@@ -130,9 +130,15 @@ def accept(welcome_socket, port, packet_loss, jitter, bdp): #basically accept
 
                 jit = random.uniform(0, 1)
                 if jit >= jitter:
+                    print("in jitter")
                     if rate > bdp:
+                        print("sending packet")
                         send_packet(synack.get_bits(), address[0], address[1], welcome_socket, jit*3)
+                    else:
+                        print("sending packet")
+                        send_packet(synack.get_bits(), address[0], address[1], welcome_socket, jit)
                 else:
+                    print("sending packet")
                     send_packet(synack.get_bits(), address[0], address[1], welcome_socket, 0)
 
             packet2, address2 = welcome_socket.recvfrom(1024)
