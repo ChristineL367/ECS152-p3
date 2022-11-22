@@ -173,113 +173,143 @@ class Client():
         cur_seq = prev_message[0]
         cur_ack = prev_message[1]
 
+        window = recv_window # from input
+
         file_text = open(file, "r")
         not_eof = True
+
+        pts = {}
+        temp = None
+        tcp_change = 0
 
         try:
             while self.connection:
                 print("in udp connect")
 
-                file_read = file_text.read(987)
-                file_data[cur_seq] = file_read #dictionary of file data that we sent corresponding to its sequence num
-                if not file_read:
-                    print("End Of File")
-                    not_eof = False
-                    break
+                tracker = len(pts)
+                if tracker != 0:
+                    cur_seq = pts.keys()[-1] + 1000
 
-                message = TCP_header(port, cur_seq, cur_ack, 0, 0, 0, file_read)
-                print("line: ", message.data)
+                while(len(pts) < window and not_eof == True and tracker != window):
+                    if cur_seq in file_data:
+                        cur_seq += 1000
+                        tracker += 1
+                        continue
 
-                print("sending", "seq: ", message.sequence_num, "ack: ", message.ACK_num)
-                temp = message.get_bits()
-                print(message.get_bits())
+                    file_read = file_text.read(985)
+                    
+                    if not file_read:
+                        print("End Of File")
+                        not_eof = False
+                        break
 
-                temp = bits_to_header(temp)
-                print("check: ", temp.data)
-                print(temp.ACK_num, temp.sequence_num)
+                    file_data[cur_seq] = file_read #dictionary of file data that we sent corresponding to its sequence num
+                    message = TCP_header(port, cur_seq, cur_ack, 0, 0, 0, file_read)
 
-                print("break")
-                log.append([address, port, "DATA", len(message.get_bits()), cur_seq, cur_ack])
+                    file_data[cur_seq] = message
+                    pts.append(cur_seq)
+                    cur_seq += 1000
+                    tracker += 1
+
+                    log.append([address, port, "DATA", len(message.get_bits()), cur_seq, cur_ack])
                 # self.client_sock.settimeout(self.timeout)
                 while (1):
-                    self.packets_sent += 1
-                    self.data_sent +=8000 #bandwidth
+                    # self.packets_sent += 1
+                    # self.data_sent +=8000 #bandwidth
                     start = time.perf_counter()
 
-                    self.client_sock.sendto(message.get_bits(), (address, port))
+                    for i in cur_seq:
+                        packet = file_data.get(i)                    
+                        self.client_sock.sendto(packet.get_bits(), (address, port))
+                        
+                        self.packets_sent += 1
+                        self.data_sent +=8000
+                        self.client_sock.settimeout(self.timeout)
 
-                    self.packets_sent += 1
-                    self.client_sock.settimeout(self.timeout)
-                    try:
+                    temp = pts
+                    pts = []
+                    acks_recv = []
 
-                        data, addr = self.client_sock.recvfrom(1024)
-                        self.client_sock.settimeout(None)
-                        end = time.perf_counter()
-                        ack_message = bits_to_header(data)
-                        cur_seq = ack_message.ACK_num
-                        cur_ack = ack_message.sequence_num
-                        acks.append(ack_message.ACK_num) #append the ack we got
-                        if len(acks) >=3: #received 3 acks now, can start checking if we lost a packet
-                            if len(set(acks[(len(acks)-3):len(acks)])) == 1:#got three duplicate acks
-                               #CREATE OLD PACKET TO SEND AGAIN!!
-                                print("3 duplicate ACKS, resend packet from 3 packets ago")
-                                message.sequence_num = cur_seq - 3000 #take us back to previous lost sequence to resend
-                                message.data = file_data[message.sequence_num]
-                                if tcp_vers == "tahoe":
-                                    message.receive_window = 1  # bring window all the way back to 1
-                                elif tcp_vers == "reno":
-                                    message.receive_window /= 2  # cut window in half
-                                #set new timeout value
-                                new_est = (1 - .125) * self.SRTT + .125 * (end - start)
-                                new_dev = (1 - .25) * self.RTTVAR + .25 * abs(self.SRTT - ((end - start) / 2))
-                                self.SRTT = new_est
+                    
+                    while True:
+                        try:
+                            data, addr = self.client_sock.recvfrom(1024)
+                            self.client_sock.settimeout(None)
+                            end = time.perf_counter()
+                            ack_message = bits_to_header(data)
+                            cur_seq = ack_message.ACK_num
+                            cur_ack = ack_message.sequence_num
+                            acks_recv.append(ack_message.ACK_num) #append the ack we got
+                            acks.append(ack_message.ACK_num)
+                            window = ack_message.receive_window
+                            # if len(acks) >=3: #received 3 acks now, can start checking if we lost a packet
+                            #     if len(set(acks[(len(acks)-3):len(acks)])) == 1:#got three duplicate acks
+                            #     #CREATE OLD PACKET TO SEND AGAIN!!
+                            #         print("3 duplicate ACKS, resend packet from 3 packets ago")
+                            #         # message.sequence_num = cur_seq - 3000 #take us back to previous lost sequence to resend
+                            #         message = file_data[acks[-1]]
+                            #         if tcp_vers == "tahoe":
+                            #             message.receive_window = 1  # bring window all the way back to 1
+                            #             window = 1
+                            #         elif tcp_vers == "reno":
+                            #             message.receive_window /= 2  # cut window in half
+                            #             window = message.receive_window / 2
+                            #         tcp_change = 1
+                            #         #set new timeout value
+                            #         pts.append(message)
+                            #         new_est = (1 - .125) * self.SRTT + .125 * (end - start)
+                            #         new_dev = (1 - .25) * self.RTTVAR + .25 * abs(self.SRTT - ((end - start) / 2))
+                            #         self.SRTT = new_est
 
-                                self.RTTVAR = new_dev
-                                self.timeout = self.SRTT + 4 * self.RTTVAR
-                                if self.timeout < 1:
-                                    self.timeout = 1
+                            #         self.RTTVAR = new_dev
+                            #         self.timeout = self.SRTT + 4 * self.RTTVAR
+                            #         if self.timeout < 1:
+                            #             self.timeout = 1
 
-                                continue #go back to top of outer while loop this time resending the lost packet
-                        if message.receive_window < ssthreshold:
+                                    # continue #go back to top of outer while loop this time resending the lost packet
+                            # if message.receive_window < ssthreshold:
 
-                            message.receive_window *= 2  # double window after 1 RTT if within ssthresh
-                        else:
-                            ssthreshold /= 2  # cut ssthreshold in half once threshold reached
-                            message.receive_window += 1  # increment window by 1 after threshhold reached
-                        new_est = (1 - .125) * self.SRTT + .125 * (end-start)
-                        new_dev = (1 - .25) * self.RTTVAR + .25 * abs(self.SRTT - ((end-start) / 2))
-                        self.SRTT = new_est
+                            #     message.receive_window *= 2  # double window after 1 RTT if within ssthresh
+                            # else:
+                            #     ssthreshold /= 2  # cut ssthreshold in half once threshold reached
+                            #     message.receive_window += 1  # increment window by 1 after threshhold reached
+                            new_est = (1 - .125) * self.SRTT + .125 * (end-start)
+                            new_dev = (1 - .25) * self.RTTVAR + .25 * abs(self.SRTT - ((end-start) / 2))
+                            self.SRTT = new_est
 
-                        self.RTTVAR = new_dev
-                        self.timeout = self.SRTT + 4 * self.RTTVAR
-                        if self.timeout < 1:
-                            self.timeout = 1
+                            self.RTTVAR = new_dev
+                            self.timeout = self.SRTT + 4 * self.RTTVAR
+                            if self.timeout < 1:
+                                self.timeout = 1
 
-                        if message.get_type() != "ACK":
-                            continue
+                            if message.get_type() != "ACK":
+                                continue
 
-                        if message.FIN == 1:
-                            file_text.close()
-                            self.closeconnection(1, cur_seq, cur_ack + 1, address, port)
-                            break
+                            if message.FIN == 1:
+                                file_text.close()
+                                self.closeconnection(1, cur_seq, cur_ack + 1, address, port)
+                                break
 
-                        if message.ACK == 1:
-                            print(data)
-                            print("client: ", message.data, "seq: ", message.sequence_num, "ack: ", message.ACK_num)
-                            print("received: ack: ", message.ACK_num, " seq: ", message.sequence_num)
-                            cur_seq += ACK_num
-                            cur_ack = 1 + message.sequence_num
-                            break
+                            # if message.ACK == 1:
+                            #     print(data)
+                            #     print("client: ", message.data, "seq: ", message.sequence_num, "ack: ", message.ACK_num)
+                            #     print("received: ack: ", message.ACK_num, " seq: ", message.sequence_num)
+                            #     cur_seq += ACK_num
+                            #     cur_ack = 1 + message.sequence_num
+                            #     break
 
-                        break
-                    except socket.timeout:
+                        except socket.timeout:
+                            pass
+
+                    if acks_recv == []:
                         # set new timeout value
                         end = time.perf_counter()
                         if tcp_vers == "tahoe":
                             message.receive_window = 1  # bring window all the way back to 1
-
+                            window = 1
                         elif tcp_vers == "reno":
                             message.receive_window /= 2  # cut window in half
+                            window = message.receive_window / 2
                         new_est = (1 - .125) * self.SRTT + .125 * (end - start)
                         new_dev = (1 - .25) * self.RTTVAR + .25 * abs(self.SRTT - ((end - start) / 2))
                         self.SRTT = new_est
@@ -290,8 +320,53 @@ class Client():
                             self.timeout = 1
                         self.packet_losses += 1
                         #print("RESEND")
-                        continue
+                        pts = temp
+                        break
 
+                    else:
+                        if len(acks) >=3: #received 3 acks now, can start checking if we lost a packet
+                            if len(set(acks[(len(acks)-3):len(acks)])) == 1:#got three duplicate acks
+                            #CREATE OLD PACKET TO SEND AGAIN!!
+                                print("3 duplicate ACKS, resend packet from 3 packets ago")
+                                # message.sequence_num = cur_seq - 3000 #take us back to previous lost sequence to resend
+                                message = file_data[acks[-1]]
+                                if tcp_vers == "tahoe":
+                                    message.receive_window = 1  # bring window all the way back to 1
+                                    window = 1
+                                elif tcp_vers == "reno":
+                                    message.receive_window /= 2  # cut window in half
+                                    window = message.receive_window / 2
+                                tcp_change = 1
+                                #set new timeout value
+                                pts.append(message)
+                                new_est = (1 - .125) * self.SRTT + .125 * (end - start)
+                                new_dev = (1 - .25) * self.RTTVAR + .25 * abs(self.SRTT - ((end - start) / 2))
+                                self.SRTT = new_est
+
+                                self.RTTVAR = new_dev
+                                self.timeout = self.SRTT + 4 * self.RTTVAR
+                                if self.timeout < 1:
+                                    self.timeout = 1
+                                break
+                            else:
+                                if message.receive_window < ssthreshold:
+
+                                    message.receive_window *= 2  # double window after 1 RTT if within ssthresh
+                                else:
+                                    ssthreshold /= 2  # cut ssthreshold in half once threshold reached
+                                    message.receive_window += 1  # increment window by 1 after threshhold reached
+                                break
+
+                        else:
+                            if message.receive_window < ssthreshold:
+
+                                message.receive_window *= 2  # double window after 1 RTT if within ssthresh
+                            else:
+                                ssthreshold /= 2  # cut ssthreshold in half once threshold reached
+                                message.receive_window += 1  # increment window by 1 after threshhold reached
+                            break
+                    
+                        
 
 
 
