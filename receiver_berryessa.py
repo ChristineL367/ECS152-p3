@@ -278,7 +278,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
 
                         print(packet)
                         print(message.data)
-                        bits = len(packet.decode())
+                        bits = int(len(packet.decode())/8)
 
                         print("num of bits: ", bits)
 
