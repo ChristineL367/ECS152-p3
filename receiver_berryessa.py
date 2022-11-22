@@ -85,10 +85,10 @@ def send_packet(message, DNS_IP, DNS_PORT, socket_obj, jitter):
     print(message)
     time.sleep(jitter)
     our_socket.sendto(message, address)
-def accept(welcome_socket, port, packet_loss, jitter, bdp, packets_sent): #basically accept
+def accept(welcome_socket, port, packet_loss, jitter, bdp): #basically accept
     try:
         while(1):
-            packets_sent+=1
+
             packet, address = welcome_socket.recvfrom(1024)
 
             connect = connection()
@@ -105,6 +105,7 @@ def accept(welcome_socket, port, packet_loss, jitter, bdp, packets_sent): #basic
             if x <= packet_loss:
                 print("continued")
                 continue
+            global gotsyn
             gotsyn = 0
             cur_seq = 0
             cur_ack = message.sequence_num
@@ -121,7 +122,7 @@ def accept(welcome_socket, port, packet_loss, jitter, bdp, packets_sent): #basic
                 connect.data_port.bind(("127.0.0.1", 0))
 
                 print(connect.data_port.getsockname()[1])
-                synack = TCP_header(connect.data_port.getsockname()[1], 0, cur_ack+1, 0, 0, 0, "", port)
+                synack = TCP_header(connect.data_port.getsockname()[1], 0, cur_ack+1, 0, 0, 0, message.receive_window,"", port)
                 synack.custom_message(1, 1, 0)
 
                 got_syn = 1
@@ -152,21 +153,21 @@ def accept(welcome_socket, port, packet_loss, jitter, bdp, packets_sent): #basic
                 welcoming_closeconnection(welcome_socket,0, cur_seq, cur_ack, address[0], address[1], welcome_socket.getsockname()[1])
                 return 0
 
-            if message2.get_type() == "ACK" and got_syn == 1:
+            if message2.get_type() == "ACK":
                 print("check ack")
                 connect.data_port.setblocking(False)
                 curconnection = connect
 
-                return curconnection.data_port, address
+                return curconnection.data_port, address2
             else:
                 print("Couldn't establish handshake...")
                 return 0
 
     except KeyboardInterrupt:
         print("Keyboard Interruption")
-        welcoming_closeconnection(welcome_socket,1, cur_seq, cur_ack, address[0], address[1], welcome_socket.getsockname()[1]) ##############
+        welcoming_closeconnection(welcome_socket,1, cur_seq, cur_ack, address[0], address[1], welcome_socket.getsockname()[1], message.receive_window) ##############
         return 0
-def service_connection(key, mask, packet_loss, jitter, output_file,packets_sent):
+def service_connection(key, mask, packet_loss, jitter, output_file):
     # Get the socket from the key
     sock = key.fileobj
     data = key.data
@@ -220,14 +221,14 @@ def service_connection(key, mask, packet_loss, jitter, output_file,packets_sent)
                             #print("received seq: ", message.sequence_num, " ack: ", message.ACK_num)
                             if message.get_type() == "FIN":
                                 data_closeconnection(sock, 0, cur_seq, cur_ack+1, address[0], address[1], sock.getsockname()[
-                                    1])
+                                    1],message.receive_window)
 
                             bits = len(packet.decode())
 
 
                             f.write(message.data)
                             #print("break")
-                            response = TCP_header(address[1], message.ACK_num, message.sequence_num+bits, 0, 1, 0, "", sock.getsockname()[1])
+                            response = TCP_header(address[1], message.ACK_num, message.sequence_num+bits, 0, 1, 0, message.receive_window,"", sock.getsockname()[1])
                             packet = response.get_bits()
 
                             log.append([address[0], address[1], "DATA", len(packet)])
@@ -251,7 +252,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file,packets_sent)
                             print("received seq: ", message.sequence_num, " ack: ", message.ACK_num)
                             if message.get_type() == "FIN":
                                 data_closeconnection(sock, 0, cur_seq, cur_ack+1, address[0], address[1], sock.getsockname()[
-                                    1])
+                                    1], message.receive_window)
 
                             print(packet)
                             print(message.data)
@@ -266,7 +267,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file,packets_sent)
                             f.write(message.data)
                             print("break")
 
-                            response = TCP_header(address[1], message.ACK_num, message.sequence_num+bits, 0, 1, 0, "", sock.getsockname()[1])
+                            response = TCP_header(address[1], message.ACK_num, message.sequence_num+bits, 0, 1, 0, message.receive_window,"", sock.getsockname()[1])
                             packet = response.get_bits()
 
                             log.append([address[0], address[1], "DATA", len(packet)])
@@ -301,7 +302,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file,packets_sent)
         except KeyboardInterrupt:
             print("Keyboard Interruption")
             f.close()
-            data_closeconnection(sock, 1,cur_seq, cur_ack, address[0], address[1],sock.getsockname()[1])
+            data_closeconnection(sock, 1,cur_seq, cur_ack, address[0], address[1],sock.getsockname()[1], message.receive_window)
 
 def bits_to_header(bits):
     bits = bits.decode()
@@ -333,7 +334,7 @@ def bits_to_header(bits):
     return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, receive_window,data, src_port)
 
 
-def welcoming_closeconnection(welcome_socket, putah, cur_seq, cur_ack, address, dst_port, src_port):
+def welcoming_closeconnection(welcome_socket, putah, cur_seq, cur_ack, address, dst_port, src_port, receive_window):
     if putah == 1:
         ack = False
         while ack != True:
@@ -349,7 +350,7 @@ def welcoming_closeconnection(welcome_socket, putah, cur_seq, cur_ack, address, 
             if message.ACK == 1:
                 break
     elif putah == 0:
-        message = TCP_header(dst_port,cur_seq,cur_ack+1,0,0,0, "", src_port)
+        message = TCP_header(dst_port,cur_seq,cur_ack+1,0,0,0, receive_window,"", src_port)
         message.ACK = 1
 
         log.append([address, dst_port, "ACK", len(message.get_bits())])
@@ -359,7 +360,7 @@ def welcoming_closeconnection(welcome_socket, putah, cur_seq, cur_ack, address, 
     welcome_socket.close()
     welcome_close = 1
 
-def data_closeconnection(curconnection,putah, cur_seq, cur_ack, address, dst_port, src_port):
+def data_closeconnection(curconnection,putah, cur_seq, cur_ack, address, dst_port, src_port, receive_window):
 
     # putah = 0 -> client initiated close
     # putah = 1 -> server initiated close
@@ -368,7 +369,7 @@ def data_closeconnection(curconnection,putah, cur_seq, cur_ack, address, dst_por
         ack = False
         count = 0
         while ack != True or count != 3:
-            message = TCP_header(dst_port,cur_seq,cur_ack,0,0,0, "", src_port)
+            message = TCP_header(dst_port,cur_seq,cur_ack,0,0,0, receive_window,"", src_port)
             message.FIN = 1
 
             print("in data fin")
@@ -383,7 +384,7 @@ def data_closeconnection(curconnection,putah, cur_seq, cur_ack, address, dst_por
                 break
             count += 1
     elif putah == 0:
-        message = TCP_header(dst_port,cur_seq,cur_ack,0,0,0, "", src_port)
+        message = TCP_header(dst_port,cur_seq,cur_ack,0,0,0, receive_window,"", src_port)
         message.ACK = 1
 
         log.append([address, dst_port, "ACK", len(message.get_bits())])
@@ -393,9 +394,9 @@ def data_closeconnection(curconnection,putah, cur_seq, cur_ack, address, dst_por
     curconnection.close()
     return 1
 
-def accept_wrapper(sock, port,packet_loss, jitter, bdp, packets_sent):
+def accept_wrapper(sock, port,packet_loss, jitter, bdp):
     # Accept a connection and register the socket with the selector
-    conn, addr = accept(sock, port, packet_loss, jitter,bdp, packets_sent)
+    conn, addr = accept(sock, port, packet_loss, jitter,bdp)
     print(f"Accepted connection from {addr}")
     # Set the socket to non-blocking
     conn.setblocking(False)
@@ -428,7 +429,7 @@ if __name__ == '__main__':
 
                 if key.data is None:
 
-                    accept_wrapper(key.fileobj, port, packet_loss, jitter, bdp, 0)
+                    accept_wrapper(key.fileobj, port, packet_loss, jitter, bdp)
                 else:
 
                     service_connection(key, mask, packet_loss, jitter, output_file)
