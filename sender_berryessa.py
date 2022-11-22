@@ -214,7 +214,7 @@ class Client():
 
                     log.append([address, port, "DATA", len(message.get_bits()), cur_seq, cur_ack])
                 # self.client_sock.settimeout(self.timeout)
-                # print(file_data.keys())
+                print(file_data.keys())
                 # print(cur_seq)
                 print("window: ", window)
                 while (1):
@@ -323,7 +323,7 @@ class Client():
                         elif tcp_vers == "reno":
                             if message.receive_window != 1:
                                 message.receive_window /= 2  # cut window in half
-                                window = message.receive_window / 2
+                                window = message.receive_window
                         new_est = (1 - .125) * self.SRTT + .125 * (end - start)
                         new_dev = (1 - .25) * self.RTTVAR + .25 * abs(self.SRTT - ((end - start) / 2))
                         self.SRTT = new_est
@@ -343,13 +343,15 @@ class Client():
                             #CREATE OLD PACKET TO SEND AGAIN!!
                                 print("3 duplicate ACKS, resend packet from 3 packets ago")
                                 # message.sequence_num = cur_seq - 3000 #take us back to previous lost sequence to resend
+
+                                
                                 message = file_data[acks[-1]]
                                 if tcp_vers == "tahoe":
                                     message.receive_window = 1  # bring window all the way back to 1
                                     window = 1
                                 elif tcp_vers == "reno":
                                     message.receive_window /= 2  # cut window in half
-                                    window = message.receive_window / 2
+                                    window = message.receive_window
                                 tcp_change = 1
                                 #set new timeout value
                                 pts.append(message)
@@ -366,11 +368,11 @@ class Client():
                                 if message.receive_window < ssthreshold:
 
                                     message.receive_window *= 2  # double window after 1 RTT if within ssthresh
-                                    window = message.receive_window * 2 
+                                    window = message.receive_window 
                                 else:
                                     ssthreshold /= 2  # cut ssthreshold in half once threshold reached
                                     message.receive_window += 1  # increment window by 1 after threshhold reached
-                                    window = message.receive_window + 1
+                                    window = message.receive_window 
                                 break
 
                         else:
@@ -378,11 +380,11 @@ class Client():
                             if message.receive_window < ssthreshold:
 
                                 message.receive_window *= 2  # double window after 1 RTT if within ssthresh
-                                window = message.receive_window * 2 
+                                window = message.receive_window  
                             else:
                                 ssthreshold /= 2  # cut ssthreshold in half once threshold reached
                                 message.receive_window += 1  # increment window by 1 after threshhold reached
-                                window = message.receive_window + 1
+                                window = message.receive_window
                             break
                     
                         
