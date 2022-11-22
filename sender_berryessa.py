@@ -164,16 +164,17 @@ class Client():
             print("Keyboard Interruption")
             self.closeconnection(0, curr_seq, curr_ack, address, port)
 
-    def udpconnect(self, prev_message, address, port, file, tcp_vers):
+    def udpconnect(self, prev_message, address, port, file, tcp_vers, recv_window):
         file_data = {}
         global log
         global ssthreshold
         ssthreshold = 16
+
         acks = [] #list of acks to detect duplicate acks
         cur_seq = prev_message[0]
         cur_ack = prev_message[1]
 
-        window = recv_window # from input
+        window = 1 # from input
 
         file_text = open(file, "r")
         not_eof = True
