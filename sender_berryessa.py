@@ -491,7 +491,7 @@ def bits_to_header(bits):
     return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, receive_window,data, src_port)
 
 def writetofile(port):
-    file_name = str(port) + "_solano.txt"
+    file_name = str(port) + "_berryessa.txt"
     with open(file_name, 'w') as f:
          for i in range(0, len(log)):
             f.write(str(log[i][0]) + " | " + str(log[i][1]) + " | "+ str(log[i][2])+ " | " + str(log[i][3]) + " | " + str(log[i][4]) + "|" + str(log[i][5]) + "\n")
