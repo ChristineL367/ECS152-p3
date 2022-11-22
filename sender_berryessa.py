@@ -91,7 +91,7 @@ class Client():
 
 
         try:
-            # first handshake (self, dst_port, seq_num, ack_num, syn, ack, fin, data, src_port = 53
+            # first handshake (self, dst_port, seq_num, ack_num, syn, ack, fin, receive_window, data, src_port = 53
             message_syn = TCP_header(port, 0, 0, 0, 0, 0, 1,"")
             message_syn.custom_message(0, 1, 0)
 
@@ -111,7 +111,7 @@ class Client():
                     # receive second handshake
                     self.client_sock.settimeout(self.timeout)
                     data, addr = self.client_sock.recvfrom(1024)
-
+                    
                     self.client_sock.settimeout(None)
                     end = time.perf_counter()
 
@@ -164,17 +164,16 @@ class Client():
             print("Keyboard Interruption")
             self.closeconnection(0, curr_seq, curr_ack, address, port)
 
-    def udpconnect(self, prev_message, address, port, file, tcp_vers, recv_window):
+    def udpconnect(self, prev_message, address, port, file, tcp_vers):
         file_data = {}
         global log
         global ssthreshold
         ssthreshold = 16
-
         acks = [] #list of acks to detect duplicate acks
         cur_seq = prev_message[0]
         cur_ack = prev_message[1]
 
-        window = 1 # from input
+        window = recv_window # from input
 
         file_text = open(file, "r")
         not_eof = True
@@ -417,7 +416,6 @@ class Client():
         self.connection = 0
         self.client_sock.close()
 
-
 def bits_to_header(bits):
     bits = bits.decode()
     src_port = int(bits[:16], 2)
@@ -432,9 +430,10 @@ def bits_to_header(bits):
     print(syn)
     ack = int(bits[102], 2)
     fin = int(bits[103], 2)
+    receive_window = int(bits[104:120], 2)
     print("in bits to header 1")
     try:
-        data_string = bits[104:]
+        data_string = bits[120:]
         data = ""
         length = len(data_string) / 8
 
@@ -444,8 +443,7 @@ def bits_to_header(bits):
             data += chr(int(str(data_string[start:end]), 2))
     except:
         data = ""
-    return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data, src_port)
-
+    return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, receive_window,data, src_port)
 
 if __name__ == '__main__':
     server_ip = sys.argv[2]
