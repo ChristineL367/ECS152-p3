@@ -214,8 +214,9 @@ class Client():
 
                     log.append([address, port, "DATA", len(message.get_bits()), cur_seq, cur_ack])
                 # self.client_sock.settimeout(self.timeout)
-                print(file_data.keys())
-                print(cur_seq)
+                # print(file_data.keys())
+                # print(cur_seq)
+                print("window: ", window)
                 while (1):
                     # self.packets_sent += 1
                     # self.data_sent +=8000 #bandwidth
@@ -244,7 +245,7 @@ class Client():
                             end = time.perf_counter()
                             ack_message = bits_to_header(data)
                             cur_seq = ack_message.ACK_num
-                            cur_ack = ack_message.sequence_num
+                            cur_ack = ack_message.sequence_num + 1
                             acks_recv.append(ack_message.ACK_num) #append the ack we got
                             acks.append(ack_message.ACK_num)
                             window = ack_message.receive_window
@@ -365,9 +366,11 @@ class Client():
                                 if message.receive_window < ssthreshold:
 
                                     message.receive_window *= 2  # double window after 1 RTT if within ssthresh
+                                    window = message.receive_window * 2 
                                 else:
                                     ssthreshold /= 2  # cut ssthreshold in half once threshold reached
                                     message.receive_window += 1  # increment window by 1 after threshhold reached
+                                    window = message.receive_window + 1
                                 break
 
                         else:
@@ -375,9 +378,11 @@ class Client():
                             if message.receive_window < ssthreshold:
 
                                 message.receive_window *= 2  # double window after 1 RTT if within ssthresh
+                                window = message.receive_window * 2 
                             else:
                                 ssthreshold /= 2  # cut ssthreshold in half once threshold reached
                                 message.receive_window += 1  # increment window by 1 after threshhold reached
+                                window = message.receive_window + 1
                             break
                     
                         

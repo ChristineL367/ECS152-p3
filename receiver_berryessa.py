@@ -280,6 +280,8 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
                         response = TCP_header(address[1], message.ACK_num, message.sequence_num+bits, 0, 1, 0, message.receive_window,"", sock.getsockname()[1])
                         packet = response.get_bits()
 
+                        print("seq: ", response.sequence_num, "ack: ", response.ACK_num)
+
                         log.append([address[0], address[1], "DATA", len(packet)])
 
                         data.outb += packet
