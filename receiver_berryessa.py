@@ -25,7 +25,7 @@ class connection():
         self.closed = 0
 
 class TCP_header():
-    def __init__(self, dst_port, seq_num, ack_num, syn, ack, fin, data, src_port):
+    def __init__(self, dst_port, seq_num, ack_num, syn, ack, fin, receive_window, data, src_port):
         self.source_prt = src_port  # 16 bits
         self.destination_prt = dst_port # 16 bits
         self.sequence_num = seq_num  # 32 bits
@@ -40,7 +40,7 @@ class TCP_header():
         # self.RST = 0 # 1 bit
         self.SYN = syn  # syn flag 0 if not syn, 1 if syn-ack or syn
         self.FIN = fin # 1 bit
-        self.receive_window = 0 # 16 bits
+        self.receive_window = receive_window # 16 bits
         # self.internet_checksum = 0 # 16 bits
         # self.urgent_data_ptr = 0 # 16 bits
         # self.options = 0
@@ -56,6 +56,7 @@ class TCP_header():
         bits += '{0:01b}'.format(self.SYN)
         bits += '{0:01b}'.format(self.ACK)
         bits += '{0:01b}'.format(self.FIN)
+        bits += '{0:016b}'.format(self.receive_window)
         if self.data != "":
             bits += self.data
         return bits.encode()
@@ -185,73 +186,118 @@ def service_connection(key, mask, packet_loss, jitter, output_file,packets_sent)
         try:
 
             if mask & selectors.EVENT_READ:
-                # print the event
-                print(f"Read event for {data.addr}")
-                # If we can read, it means the socket is ready to receive data
+                acks_to_send = []
+                while True:
+                    data.outb = None
+                    global lost_ack
+                    global current_ack
+                    lost_ack = False
+                    # print the event
+                    print(f"Read event for {data.addr}")
+                    # If we can read, it means the socket is ready to receive data
+                    packet, address = sock.recvfrom(8000)  # check this size
+                    address_var = address
+                    message = bits_to_header(packet)
+                    x = random.randrange(0, 100)
+                    if lost_ack != False:
+                        current_ack = message.sequence_num
 
-                packet, address = sock.recvfrom(8000)  # check this size
-                address_var = address
-                message = bits_to_header(packet)
-                x = random.randrange(0, 100)
+                    rate = message.receive_window * 1000
+                    rate_var = rate
+                    if rate > bdp:
+                        # congestion state
+                        packet_loss *= 3
+                    if x < packet_loss or lost_ack:
+                        #lost packet
+                        lost_ack = True
+                        if packet and address:
+                            # If we have received data, store it in the data object
 
-                rate = message.receive_window * 1000
-                rate_var =  rate
-                if rate > bdp:
-                    # congestion state
-                    packet_loss *= 3
-                if x >= packet_loss:
-                    if packet and address:
-                        # If we have received data, store it in the data object
+                            print("received seq: ", message.sequence_num, " ack: ", message.ACK_num)
+                            cur_seq = message.ACK_num
+                            cur_ack = current_ack
+                            print("sending seq: ", cur_seq, " ack: ", cur_ack)
+                            #print("received seq: ", message.sequence_num, " ack: ", message.ACK_num)
+                            if message.get_type() == "FIN":
+                                data_closeconnection(sock, 0, cur_seq, cur_ack+1, address[0], address[1], sock.getsockname()[
+                                    1])
 
-                        print("received seq: ", message.sequence_num, " ack: ", message.ACK_num)
-                        bits = len(packet.decode())
-                        cur_seq = message.ACK_num
-                        cur_ack = message.sequence_num + bits
-                        #print("sending seq: ", cur_seq, " ack: ", cur_ack)
-                        print("received seq: ", message.sequence_num, " ack: ", message.ACK_num)
-                        if message.get_type() == "FIN":
-                            data_closeconnection(sock, 0, cur_seq, cur_ack+1, address[0], address[1], sock.getsockname()[
-                                1])
+                            bits = len(packet.decode())
 
-                        print(packet)
-                        print(message.data)
-                        bits = len(packet.decode())
 
-                        print("num of bits: ", bits)
+                            f.write(message.data)
+                            #print("break")
+                            response = TCP_header(address[1], message.ACK_num, message.sequence_num+bits, 0, 1, 0, "", sock.getsockname()[1])
+                            packet = response.get_bits()
 
-                        print("received: ack:", message.ACK_num, " sequence: ", message.sequence_num)
-                        print(packet)
-                        print(message.data)
+                            log.append([address[0], address[1], "DATA", len(packet)])
 
-                        f.write(message.data)
-                        print("break")
+                            data.outb += packet
+                        else:
+                            # If we have received no data, it means the connection is closed
+                            print(f"Closing connection to {data.addr}")
+                            sel.unregister(sock)
+                            sock.close()
 
-                        response = TCP_header(address[1], message.ACK_num, message.sequence_num+bits, 0, 1, 0, "", sock.getsockname()[1])
-                        packet = response.get_bits()
+                    elif x >= packet_loss and lost_ack == False:
+                        if packet and address:
+                            # If we have received data, store it in the data object
 
-                        log.append([address[0], address[1], "DATA", len(packet)])
+                            print("received seq: ", message.sequence_num, " ack: ", message.ACK_num)
+                            bits = len(packet.decode())
+                            cur_seq = message.ACK_num
+                            cur_ack = message.sequence_num + bits
+                            #print("sending seq: ", cur_seq, " ack: ", cur_ack)
+                            print("received seq: ", message.sequence_num, " ack: ", message.ACK_num)
+                            if message.get_type() == "FIN":
+                                data_closeconnection(sock, 0, cur_seq, cur_ack+1, address[0], address[1], sock.getsockname()[
+                                    1])
 
-                        data.outb += packet
-                    else:
-                        # If we have received no data, it means the connection is closed
-                        print(f"Closing connection to {data.addr}")
-                        sel.unregister(sock)
-                        sock.close()
+                            print(packet)
+                            print(message.data)
+                            bits = len(packet.decode())
+
+                            print("num of bits: ", bits)
+
+                            print("received: ack:", message.ACK_num, " sequence: ", message.sequence_num)
+                            print(packet)
+                            print(message.data)
+
+                            f.write(message.data)
+                            print("break")
+
+                            response = TCP_header(address[1], message.ACK_num, message.sequence_num+bits, 0, 1, 0, "", sock.getsockname()[1])
+                            packet = response.get_bits()
+
+                            log.append([address[0], address[1], "DATA", len(packet)])
+
+                            data.outb += packet
+                        else:
+                            # If we have received no data, it means the connection is closed
+                            print(f"Closing connection to {data.addr}")
+                            sel.unregister(sock)
+                            sock.close()
+                    acks_to_send.append(data.outb)
+                    break
+
             if mask & selectors.EVENT_WRITE:
                 # If we can write, it means the socket is ready to send data
-                if data.outb:
-                    # If we have data to send, send it
-                    #print(f"Echoing {data.outb!r} to {data.addr}")
-                    jit = random.uniform(0, 1)
-                    # send ACK and add jitter
-                    if jit >= jitter:
-                        if rate_var > bdp:
-                            time.sleep(jit*3)
-                        else:
-                            time.sleep(jit)
-                    sent = sock.sendto(data.outb, (address_var[0], address_var[1]))
-                    data.outb = data.outb[sent:]
+                for i in acks_to_send:
+                    if i:
+                        # If we have data to send, send it
+                        #print(f"Echoing {data.outb!r} to {data.addr}")
+                        jit = random.uniform(0, 1)
+                        # send ACK and add jitter
+                        if jit >= jitter:
+                            if rate_var > bdp:
+                                time.sleep(jit*3)
+                            else:
+                                time.sleep(jit)
+                        sent = sock.sendto(i, (address_var[0], address_var[1]))
+                        i = i[sent:]
+
             f.close()
+
         except KeyboardInterrupt:
             print("Keyboard Interruption")
             f.close()
@@ -271,9 +317,10 @@ def bits_to_header(bits):
     print(syn)
     ack = int(bits[102], 2)
     fin = int(bits[103], 2)
+    receive_window = int(bits[104:120], 2)
     print("in bits to header 1")
     try:
-        data_string = bits[104:]
+        data_string = bits[120:]
         data = ""
         length = len(data_string) / 8
 
@@ -283,7 +330,7 @@ def bits_to_header(bits):
             data += chr(int(str(data_string[start:end]), 2))
     except:
         data = ""
-    return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, data, src_port)
+    return TCP_header(dst_port, seq_num, ack_num, syn, ack, fin, receive_window,data, src_port)
 
 
 def welcoming_closeconnection(welcome_socket, putah, cur_seq, cur_ack, address, dst_port, src_port):
@@ -364,7 +411,7 @@ if __name__ == '__main__':
     port = int(sys.argv[4])
     packet_loss = int(sys.argv[6])
     jitter = float(sys.argv[8])
-    bdp = sys.argv[10]
+    bdp = int(sys.argv[10])
     output_file = sys.argv[12]
 
     lsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
