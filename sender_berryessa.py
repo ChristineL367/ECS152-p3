@@ -228,18 +228,18 @@ class Client():
                         
                         self.packets_sent += 1
                         self.data_sent +=8000
-                        self.client_sock.settimeout(self.timeout)
 
                     temp = pts
                     pts = []
                     acks_recv = []
 
+                    self.client_sock.settimeout(self.timeout)
                     
                     while True:
                         try:
                             data, addr = self.client_sock.recvfrom(1024)
                             print("GOT DATA", data)
-                            self.client_sock.settimeout(None)
+                            
                             end = time.perf_counter()
                             ack_message = bits_to_header(data)
                             cur_seq = ack_message.ACK_num
@@ -287,10 +287,13 @@ class Client():
                             if self.timeout < 1:
                                 self.timeout = 1
 
-                            if message.get_type() != "ACK":
+    
+                            if ack_message.get_type() != "ACK":
+                                print("in not ack")
                                 continue
 
-                            if message.FIN == 1:
+                            if ack_message.FIN == 1:
+                                print("in fin")
                                 file_text.close()
                                 self.closeconnection(1, cur_seq, cur_ack + 1, address, port)
                                 break
@@ -302,11 +305,14 @@ class Client():
                             #     cur_seq += ACK_num
                             #     cur_ack = 1 + message.sequence_num
                             #     break
+                            self.client_sock.settimeout(self.timeout)
 
                         except socket.timeout:
-                            pass
+                            print("in socket timeout here")
+                            break
 
                     if acks_recv == []:
+                        print("in no receive")
                         # set new timeout value
                         end = time.perf_counter()
                         if tcp_vers == "tahoe":
@@ -363,6 +369,7 @@ class Client():
                                 break
 
                         else:
+                            print("increase window")
                             if message.receive_window < ssthreshold:
 
                                 message.receive_window *= 2  # double window after 1 RTT if within ssthresh

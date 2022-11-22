@@ -12,6 +12,7 @@ import os
 log = []
 sel = selectors.DefaultSelector()
 acks_to_send = []
+current_ack = None
 
 class connection():
     def __init__(self):
