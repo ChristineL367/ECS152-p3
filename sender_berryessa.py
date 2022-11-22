@@ -188,7 +188,7 @@ class Client():
 
                 tracker = len(pts)
                 if tracker != 0:
-                    cur_seq = pts.keys()[-1] + 1000
+                    cur_seq = pts[-1] + 1000
 
                 while(len(pts) < window and not_eof == True and tracker != window):
                     if cur_seq in file_data:
@@ -223,7 +223,8 @@ class Client():
 
                     for i in range(len(pts)):
                         
-                        packet = file_data[pts[i]]                  
+                        packet = file_data[pts[i]]        
+                        print("seq: ", packet.sequence_num, "ack: ", packet.ACK_num)          
                         self.client_sock.sendto(packet.get_bits(), (address, port))
                         
                         self.packets_sent += 1
@@ -319,8 +320,9 @@ class Client():
                             message.receive_window = 1  # bring window all the way back to 1
                             window = 1
                         elif tcp_vers == "reno":
-                            message.receive_window /= 2  # cut window in half
-                            window = message.receive_window / 2
+                            if message.receive_window != 1:
+                                message.receive_window /= 2  # cut window in half
+                                window = message.receive_window / 2
                         new_est = (1 - .125) * self.SRTT + .125 * (end - start)
                         new_dev = (1 - .25) * self.RTTVAR + .25 * abs(self.SRTT - ((end - start) / 2))
                         self.SRTT = new_est
