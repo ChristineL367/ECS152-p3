@@ -243,7 +243,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
                             data_closeconnection(sock, 0, cur_seq, cur_ack+1, address[0], address[1], sock.getsockname()[
                                 1],message.receive_window)
 
-                        bits = len(packet.decode())
+                        bits = int(len(packet.decode())/8)
 
                         if cur_seq not in written:
 
@@ -270,7 +270,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
                         # If we have received data, store it in the data object
 
                         print("received seq: ", message.sequence_num, " ack: ", message.ACK_num)
-                        bits = len(packet.decode())
+                        bits = int(len(packet.decode())/8)
                         cur_seq = message.ACK_num
                         cur_ack = message.sequence_num + bits
                         #print("sending seq: ", cur_seq, " ack: ", cur_ack)

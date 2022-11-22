@@ -47,7 +47,7 @@ class TCP_header():
         bits += '{0:01b}'.format(self.SYN)
         bits += '{0:01b}'.format(self.ACK)
         bits += '{0:01b}'.format(self.FIN)
-        bits += '{0:016b}'.format(self.receive_window)
+        bits += '{0:016b}'.format(int(self.receive_window))
         if self.data != "":
             for x in self.data:
                 bits += format(ord(x), '08b')
@@ -369,6 +369,9 @@ class Client():
                             #CREATE OLD PACKET TO SEND AGAIN!!
                                 print("3 duplicate ACKS, resend packet from 3 packets ago")
                                 # message.sequence_num = cur_seq - 3000 #take us back to previous lost sequence to resend
+
+                                if acks[-1] not in file_data:
+                                    break
                                 message = file_data[acks[-1]]
                                 if tcp_vers == "tahoe":
                                     message.receive_window = 1  # bring window all the way back to 1
