@@ -170,6 +170,7 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
                 # If we can read, it means the socket is ready to receive data
 
                 packet, address = sock.recvfrom(8000)  # check this size
+
                 address_var = address
                 x = random.randrange(0, 100)
                 if x >= packet_loss:
@@ -178,26 +179,33 @@ def service_connection(key, mask, packet_loss, jitter, output_file):
                     if packet and address:
                         # If we have received data, store it in the data object
                         message = bits_to_header(packet)
-                        print("received seq: ", message.sequence_num, " ack: ", message.ACK_num)
-                        bits = len(packet.decode())
+
+                        # if (message.FIN == 1):
+                        #     f.close()
+                        #     data_closeconnection(sock, 0,cur_seq, cur_ack, address[0], address[1],sock.getsockname()[1])
+                        # print("received seq: ", message.sequence_num, " ack: ", message.ACK_num)
+                        bits = len(packet)
                         cur_seq = message.ACK_num
                         cur_ack = message.sequence_num + bits
+
+                        print("FIN in Receiver: ", message.FIN)
                         #print("sending seq: ", cur_seq, " ack: ", cur_ack)
-                        if message.get_type() == "FIN":
-                            data_closeconnection(sock, 0, cur_seq, cur_ack+1, address[0], address[1], sock.getsockname()[
-                                1])
+                        if message.FIN == 1:
+                            f.close()
+                            data_closeconnection(sock, 0, cur_seq, cur_ack+1, address_var[0], address_var[1], sock.getsockname()[1])
+                        else:    
 
-                        bits = len(packet.decode())
 
-                        print("num of bits: ", bits)
+                            # print("num of bits: ", bits)
 
-                        print("received: ack:", message.ACK_num, " sequence: ", message.sequence_num)
-                        f.write(message.data)
+                            # print("received: ack:", message.ACK_num, " sequence: ", message.sequence_num)
+                            # f.write(message.data)
 
-                        response = TCP_header(address[1], message.ACK_num, message.sequence_num+bits, 0, 1, 0, "", sock.getsockname()[1])
-                        packet = response.get_bits()
+                            response = TCP_header(address[1], cur_seq,cur_ack, 0, 1, 0, "", sock.getsockname()[1])
+                            packet = response.get_bits()
 
-                        data.outb += packet
+                            data.outb += packet
+                            f.write(message.data)
                     else:
                         # If we have received no data, it means the connection is closed
                         print(f"Closing connection to {data.addr}")
@@ -230,7 +238,7 @@ def bits_to_header(bits):
     cwr = int(bits[100], 2)
     #ece = int(bits[101], 2)
     syn = int(bits[101], 2)
-    print(syn)
+    # print(syn)
     ack = int(bits[102], 2)
     fin = int(bits[103], 2)
     try:

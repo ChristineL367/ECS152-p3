@@ -47,7 +47,7 @@ class TCP_header():
     def get_bits(self):
         bits = '{0:016b}'.format(self.source_prt)
         bits += '{0:016b}'.format(self.destination_prt)
-        bits += '{0:032b}'.format(self.sequence_num)
+        bits += '{0:032b}'.format(int(self.sequence_num))
         bits += '{0:032b}'.format(self.ACK_num)
         bits += '{0:01b}'.format(self.SYN)
         bits += '{0:01b}'.format(self.ACK)

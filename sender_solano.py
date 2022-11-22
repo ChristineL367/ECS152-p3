@@ -269,6 +269,7 @@ class Client():
                 message = TCP_header(port, cur_seq, cur_ack, 0, 0, 1, "")
 
                 log.append([self.client_sock.getsockname()[1], port, "FIN", len(message.get_bits()), time.time()])
+                print("FIN: ",message.FIN)
                 self.data_sent +=104
                 self.client_sock.sendto(message.get_bits(), (address, port))
 

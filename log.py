@@ -1,6 +1,6 @@
 import sys
 
-def combine(f1, f2, f_type):
+def combine(f1, f2, f_type, file_read):
     f1o = open(f1, "r"); f2o = open(f2, "r")
     data = ""
 
@@ -26,7 +26,7 @@ def combine(f1, f2, f_type):
             data += f1r
             f1r = f1o.readline()
     
-    log_file = f_type + "_log.txt"
+    log_file = f_type + "_log_" + file_read + ".txt"
     with open (log_file, 'w') as f:
         f.write(data)
 
@@ -37,5 +37,10 @@ if __name__ == '__main__':
     f1 = sys.argv[1]
     f2 = sys.argv[2]
     f_type = sys.argv[3]
+    
+    if len(sys.argv) > 1:
+        file_read = sys.argv[4]
+    else:
+        file_read = ''
 
-    combine(f1, f2, f_type)
+    combine(f1, f2, f_type, file_read)

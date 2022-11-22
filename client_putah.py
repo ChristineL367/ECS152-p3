@@ -54,7 +54,7 @@ class TCP_header():
     def get_bits(self):
         bits = '{0:016b}'.format(self.source_prt)
         bits += '{0:016b}'.format(self.destination_prt)
-        bits += '{0:032b}'.format(self.sequence_num)
+        bits += '{0:032b}'.format(int(self.sequence_num))
         bits += '{0:032b}'.format(self.ACK_num)
         bits += '{0:01b}'.format(self.SYN)
         bits += '{0:01b}'.format(self.ACK)
@@ -145,7 +145,7 @@ class Client():
                     log.append([port, self.client_sock.getsockname()[1], "FIN", len(message.get_bits()), time.time()])
                     self.closeconnection(1, cur_seq, cur_ack + 1, address, port)
                     break
-
+           
                 if message.data == "Pong":
                     time.sleep(2)
                     log.append([port, self.client_sock.getsockname()[1], "DATA", len(message.get_bits()), time.time()])
@@ -189,7 +189,6 @@ class Client():
             log.append([self.client_sock.getsockname()[1], port, "ACK", len(message.get_bits()), time.time()])
             self.client_sock.sendto(message.get_bits(), (address, port))
 
-        print("connection closed")
         self.connection == 0
         self.client_sock.close()
 
@@ -222,7 +221,6 @@ if __name__ == '__main__':
     client = Client()
 
     input = client.handshake(server_ip, port)
-    print(client.data_port)
     if client.connection == True:
         time.sleep(4)
         client.udpconnect(input, server_ip, client.data_port)
